@@ -1,14 +1,15 @@
-import 'package:flame/game.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexus_mortis/features/case_selection/case_selection_page.dart';
+import 'package:nexus_mortis/game/progression/progression_service.dart';
 import 'package:nexus_mortis/main.dart';
-import 'package:nexus_mortis/game/nexus_game.dart';
 
 void main() {
-  testWidgets('NexusMortisApp loads successfully and displays GameWidget', (WidgetTester tester) async {
+  testWidgets('NexusMortisApp loads successfully and displays CaseSelectionPage', (WidgetTester tester) async {
+    final progressionService = ProgressionService();
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const NexusMortisApp());
+    await tester.pumpWidget(NexusMortisApp(progressionService: progressionService));
 
-    // Verify that the GameWidget containing NexusGame is present on screen.
-    expect(find.byType(GameWidget<NexusGame>), findsOneWidget);
+    // Verify that the CaseSelectionPage is present on screen.
+    expect(find.byType(CaseSelectionPage), findsOneWidget);
   });
 }

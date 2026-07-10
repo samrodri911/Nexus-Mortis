@@ -20,6 +20,7 @@ class CaseData {
     required this.placedObjects,
     required this.clues,
     required this.solution,
+    this.requiredCaseId,
   });
 
   final String id;
@@ -44,4 +45,8 @@ class CaseData {
   /// Se mantiene aislada del estado de juego (BoardController)
   /// para evitar acoplamientos y prepararse para el sistema de validación.
   final SolutionData solution;
+
+  /// ID del caso que debe ser completado antes de poder jugar este.
+  /// Si es null, el caso está desbloqueado por defecto.
+  final String? requiredCaseId;
 }

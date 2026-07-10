@@ -30,7 +30,8 @@ class CellData {
     required this.type,
     this.objectId,
     this.state = CellState.normal,
-  }) : candidateSuspectIds = {};
+  })  : candidateSuspectIds = {},
+        autoEliminationSources = {};
 
   final int row;
   final int col;
@@ -43,15 +44,30 @@ class CellData {
   /// Estado visual actual de la celda.
   CellState state;
 
-  /// Anotación global de la celda (ej. descartada con 'X').
-  /// Pertenece a la celda misma, no a un sospechoso.
+  /// Anotación global de la celda (ej. descartada manualmente con 'X').
+  /// Pertenece a la celda misma, no a un sospechoso específico.
   CellAnnotation annotation = CellAnnotation.none;
 
   /// IDs de los sospechosos marcados como candidatos en esta celda.
-  /// Permite múltiples candidatos simultáneos por celda.
-  /// Renombrado de candidateIds para mayor claridad.
   final Set<String> candidateSuspectIds;
 
+  /// ID del sospechoso confirmado en esta celda.
+  /// Es una caché de renderizado sincronizada con
+  /// [BoardController._confirmedAssignments], que es la fuente de verdad.
+  String? confirmedSuspectId;
+
+  /// IDs de sospechosos cuya confirmación generó un bloqueo automático
+  /// en esta celda (Auto-X). La celda muestra Auto-X si el Set no está vacío.
+  /// Al desconfirmar un sospechoso, su ID se elimina de esta colección,
+  /// sin afectar los bloqueos generados por otros sospechosos.
+  final Set<String> autoEliminationSources;
+
+  /// Retorna true si la celda muestra una Auto-X activa.
+  bool get isAutoEliminated => autoEliminationSources.isNotEmpty;
+
+  /// Una celda con objeto físico.
   bool get isBlocked => type == CellType.blocked;
+
+  /// Una celda sin objeto físico.
   bool get isFree => type == CellType.free;
 }
