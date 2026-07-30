@@ -6,6 +6,7 @@ import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
+import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 import 'package:nexus_mortis/game/validation/validation_service.dart';
 import 'package:nexus_mortis/game/validation/models/validation_status.dart';
@@ -20,7 +21,16 @@ class NexusGame extends FlameGame {
   /// El juego exige ahora un [CaseData] inmutable como fuente de verdad.
   /// El controlador se crea en el constructor para que esté disponible
   /// inmediatamente, antes de que [onLoad] sea invocado por Flame.
-  NexusGame(this.caseData) : boardController = BoardController.fromCase(caseData) {
+  NexusGame({
+    required this.caseData,
+    this.saveState,
+  }) {
+    if (saveState != null) {
+      boardController = BoardController.fromSaveState(caseData, saveState!);
+    } else {
+      boardController = BoardController.fromCase(caseData);
+    }
+
     // 1. Extraer posiciones fijas de los objetos
     final Map<String, CellPosition> objectPositions = {};
     for (final obj in caseData.placedObjects) {
@@ -42,7 +52,8 @@ class NexusGame extends FlameGame {
   }
 
   final CaseData caseData;
-  final BoardController boardController;
+  final ActiveGameState? saveState;
+  late final BoardController boardController;
   late final ValidationService validationService;
 
   /// Notificador que expone el estado actual de la validación del puzzle.

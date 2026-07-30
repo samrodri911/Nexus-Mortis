@@ -9,6 +9,8 @@ import 'package:nexus_mortis/game/player/models/player_board_state.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
+import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
+import 'package:nexus_mortis/game/save_state/models/cell_snapshot.dart';
 
 /// Controla el estado lógico del tablero.
 ///
@@ -59,6 +61,33 @@ class BoardController {
       clues: caseData.clues,
       placedObjects: caseData.placedObjects,
     );
+  }
+
+  /// Construye el controlador reconstruyendo su estado interno a partir de un snapshot de guardado.
+  factory BoardController.fromSaveState(CaseData caseData, ActiveGameState saveState) {
+    final controller = BoardController.fromCase(caseData);
+
+    for (int r = 0; r < controller.cells.length; r++) {
+      for (int c = 0; c < controller.cells[r].length; c++) {
+        final cell = controller.cells[r][c];
+        // Encontrar el snapshot correspondiente a la celda original (r, c)
+        // Como la lista de snapshots es un vector lineal, calculamos el índice:
+        // índice = r * columnas + c
+        final snapshot = saveState.cells[r * caseData.boardColumns + c];
+
+        cell.candidateSuspectIds.addAll(snapshot.candidateIds);
+        cell.confirmedSuspectId = snapshot.confirmedSuspectId;
+        cell.annotation = snapshot.eliminated ? CellAnnotation.eliminated : CellAnnotation.none;
+        cell.autoEliminationSources.addAll(snapshot.autoEliminationSources);
+
+        // Reconstruir la fuente de verdad de las confirmaciones
+        if (snapshot.confirmedSuspectId != null) {
+          controller._confirmedAssignments[snapshot.confirmedSuspectId!] = CellPosition(r, c);
+        }
+      }
+    }
+
+    return controller;
   }
 
   final List<List<CellData>> cells;
@@ -346,6 +375,32 @@ class BoardController {
     return PlayerBoardState(
       assignments: assignments,
       eliminatedCells: eliminatedCells,
+    );
+  }
+
+  /// Extrae un snapshot completo del estado lógico interno de la grilla,
+  /// incluyendo candidatos, confirmaciones, y auto eliminaciones,
+  /// para ser persistido en Isar por el SaveGameService.
+  ActiveGameState exportGameState(String caseId) {
+    final snapshots = <CellSnapshot>[];
+    for (int r = 0; r < cells.length; r++) {
+      for (int c = 0; c < cells[r].length; c++) {
+        final cell = cells[r][c];
+        snapshots.add(CellSnapshot(
+          row: r,
+          col: c,
+          candidateIds: cell.candidateSuspectIds.toList(),
+          confirmedSuspectId: cell.confirmedSuspectId,
+          eliminated: cell.annotation == CellAnnotation.eliminated,
+          autoEliminationSources: cell.autoEliminationSources.toList(),
+        ));
+      }
+    }
+
+    return ActiveGameState(
+      caseId: caseId,
+      cells: snapshots,
+      savedAt: DateTime.now(),
     );
   }
 }

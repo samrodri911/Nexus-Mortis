@@ -16,4 +16,12 @@ class CaseRegistry {
     demoCase002,
     demoCase003,
   ];
+
+  /// Busca un caso por su ID. Retorna null si no existe.
+  static CaseData? getCase(String id) {
+    for (final caseData in cases) {
+      if (caseData.id == id) return caseData;
+    }
+    return null;
+  }
 }

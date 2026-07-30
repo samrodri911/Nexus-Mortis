@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:nexus_mortis/data/repositories/progress_repository.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/progression/models/reward_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
@@ -8,12 +9,16 @@ import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 /// Es independiente de la UI y del motor del juego. Expone el estado a través
 /// de [progressNotifier] para que Flutter reaccione a los cambios.
 class ProgressionService {
-  ProgressionService({PlayerProgress? initialProgress}) {
+  ProgressionService(
+    this._repository, {
+    PlayerProgress? initialProgress,
+  }) {
     progressNotifier = ValueNotifier<PlayerProgress>(
-      initialProgress ?? const PlayerProgress.empty(),
+      initialProgress ?? PlayerProgress.empty(),
     );
   }
 
+  final ProgressRepository _repository;
   late final ValueNotifier<PlayerProgress> progressNotifier;
 
   PlayerProgress get progress => progressNotifier.value;
@@ -37,11 +42,9 @@ class ProgressionService {
   ///
   /// Es idempotente: si el caso ya estaba completado, no duplica
   /// las recompensas de monedas ni estrellas.
-  void completeCase(String caseId, RewardData reward) {
+  Future<void> completeCase(String caseId, RewardData reward) async {
     if (isCaseCompleted(caseId)) {
       // Ya fue completado antes, no otorgamos recompensas de nuevo.
-      // (Opcionalmente aquí podríamos implementar lógica para mejorar estrellas si
-      // sacó 3 en vez de 1 en un reintento).
       return;
     }
 
@@ -51,5 +54,26 @@ class ProgressionService {
       earnedCoins: reward.coins,
       earnedStars: reward.stars,
     );
+
+    await _persist();
+  }
+
+  /// Gasta monedas, retorna false si no hay fondos suficientes.
+  bool spendCoins(int amount) {
+    if (progress.coins < amount) return false;
+    progressNotifier.value = progress.copyWithSpend(amount);
+    _persist(); // No hacemos await para no bloquear la UI innecesariamente
+    return true;
+  }
+
+  /// Añade monedas de forma genérica.
+  void addCoins(int amount) {
+    progressNotifier.value = progress.copyWithAdd(amount);
+    _persist();
+  }
+
+  /// Guarda el progreso actual en el repositorio subyacente.
+  Future<void> _persist() async {
+    await _repository.saveProgress(progressNotifier.value);
   }
 }

@@ -12,10 +12,13 @@ class PlayerProgress {
   });
 
   /// Constructor inicial para un jugador nuevo.
-  const PlayerProgress.empty()
-      : coins = 0,
-        totalStars = 0,
-        completedCases = const {};
+  factory PlayerProgress.empty() {
+    return const PlayerProgress(
+      coins: 500, // 500 monedas iniciales para la demo/testing.
+      totalStars: 0,
+      completedCases: {},
+    );
+  }
 
   final int coins;
   final int totalStars;
@@ -41,6 +44,24 @@ class PlayerProgress {
       coins: coins + earnedCoins,
       totalStars: totalStars + earnedStars,
       completedCases: newCases,
+    );
+  }
+
+  /// Retorna una nueva instancia restando monedas (para comprar pistas).
+  PlayerProgress copyWithSpend(int amount) {
+    return PlayerProgress(
+      coins: coins - amount,
+      totalStars: totalStars,
+      completedCases: completedCases,
+    );
+  }
+
+  /// Retorna una nueva instancia añadiendo monedas extras (recompensas, etc).
+  PlayerProgress copyWithAdd(int amount) {
+    return PlayerProgress(
+      coins: coins + amount,
+      totalStars: totalStars,
+      completedCases: completedCases,
     );
   }
 

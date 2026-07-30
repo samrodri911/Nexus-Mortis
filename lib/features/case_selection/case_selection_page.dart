@@ -3,6 +3,8 @@ import 'package:nexus_mortis/features/home/home_page.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
 import 'package:nexus_mortis/game/puzzles/case_registry.dart';
+import 'package:nexus_mortis/game/save_state/save_game_service.dart';
+import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 
 /// Pantalla inicial donde el jugador selecciona el caso a jugar.
 /// Muestra los casos bloqueados y desbloqueados según el [ProgressionService].
@@ -10,9 +12,13 @@ class CaseSelectionPage extends StatelessWidget {
   const CaseSelectionPage({
     super.key,
     required this.progressionService,
+    required this.saveGameService,
+    required this.economyService,
   });
 
   final ProgressionService progressionService;
+  final SaveGameService saveGameService;
+  final HintEconomyService economyService;
 
   @override
   Widget build(BuildContext context) {
@@ -53,11 +59,13 @@ class CaseSelectionPage extends StatelessWidget {
                   trailing: _buildTrailing(isUnlocked, isCompleted, caseProgress?.starsEarned),
                   onTap: isUnlocked
                       ? () {
-                          Navigator.of(context).push(
+                          Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
                               builder: (_) => HomePage(
                                 caseData: caseData,
                                 progressionService: progressionService,
+                                saveGameService: saveGameService,
+                                economyService: economyService,
                               ),
                             ),
                           );
