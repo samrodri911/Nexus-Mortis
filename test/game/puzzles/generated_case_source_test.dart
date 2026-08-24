@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_origin.dart';
 import 'package:nexus_mortis/game/puzzles/models/generated_case_metadata.dart';
@@ -33,7 +34,7 @@ void main() {
         columns: 3,
         suspects: 3,
         objects: 2,
-        difficulty: config.targetDifficulty ?? config.targetDifficulty!,
+        difficulty: config.targetDifficulty ?? DifficultyLevel.medium,
         seed: 999,
       );
 

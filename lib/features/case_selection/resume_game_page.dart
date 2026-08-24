@@ -154,12 +154,13 @@ class ResumeGamePage extends StatelessWidget {
                     child: const Text('Continuar'),
                   ),
                 ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      );
-      },
+      ),
     );
+  },
+);
   }
 }

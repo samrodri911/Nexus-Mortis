@@ -56,8 +56,8 @@ void main() {
           coins: 0, 
           totalStars: 0, 
           completedCases: {
-            // Simulamos 5 casos completados para probar el generador
-            for (var i = 0; i < 5; i++) 'c_$i': CaseProgress(caseId: 'c_$i', completed: true, starsEarned: 3)
+            // Simulamos 1 caso completado para que caiga en Easy (3x3, muy fácil de generar)
+            'c_0': CaseProgress(caseId: 'c_0', completed: true, starsEarned: 3)
           }
         )
       );
@@ -72,7 +72,7 @@ void main() {
       
       expect(nextCase.id, startsWith('procedural_'));
       expect(nextCase.origin, CaseOrigin.procedural);
-      expect(nextCase.boardRows, 4); // Medium policy -> 4x3
+      expect(nextCase.boardRows, 3); // Easy policy -> 3x3
     });
   });
 }
