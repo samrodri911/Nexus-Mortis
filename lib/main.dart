@@ -11,6 +11,9 @@ import 'package:nexus_mortis/game/hints/services/hint_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/clues/evaluators/clue_evaluator.dart';
 import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
+import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
+import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
+import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,10 +41,17 @@ void main() async {
     hintService: hintService,
   );
 
+  final proceduralCaseService = ProceduralCaseService(
+    progressionService: progressionService,
+    staticSource: const StaticCaseSource(),
+    generatedSource: GeneratedCaseSource(),
+  );
+
   runApp(NexusMortisApp(
     progressionService: progressionService,
     saveGameService: saveGameService,
     economyService: economyService,
+    proceduralCaseService: proceduralCaseService,
     activeGameState: activeGameState,
   ));
 }
@@ -53,12 +63,14 @@ class NexusMortisApp extends StatelessWidget {
     required this.progressionService,
     required this.saveGameService,
     required this.economyService,
+    required this.proceduralCaseService,
     this.activeGameState,
   });
 
   final ProgressionService progressionService;
   final SaveGameService saveGameService;
   final HintEconomyService economyService;
+  final ProceduralCaseService proceduralCaseService;
   final ActiveGameState? activeGameState;
 
   @override
@@ -75,11 +87,13 @@ class NexusMortisApp extends StatelessWidget {
               progressionService: progressionService,
               saveGameService: saveGameService,
               economyService: economyService,
+              proceduralCaseService: proceduralCaseService,
             )
           : CaseSelectionPage(
               progressionService: progressionService,
               saveGameService: saveGameService,
               economyService: economyService,
+              proceduralCaseService: proceduralCaseService,
             ),
     );
   }

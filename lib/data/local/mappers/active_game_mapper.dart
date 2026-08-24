@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:nexus_mortis/data/local/models/active_game_entity.dart';
+import 'package:nexus_mortis/game/puzzles/models/generated_case_metadata.dart';
 import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/save_state/models/cell_snapshot.dart';
 
@@ -23,10 +24,18 @@ class ActiveGameMapper {
       );
     }).toList();
 
+    GeneratedCaseMetadata? metadata;
+    if (entity.proceduralMetadataJson != null) {
+      metadata = GeneratedCaseMetadata.fromJson(
+        jsonDecode(entity.proceduralMetadataJson!) as Map<String, dynamic>,
+      );
+    }
+
     return ActiveGameState(
       caseId: entity.caseId,
       cells: cells,
       savedAt: entity.savedAt,
+      proceduralMetadata: metadata,
     );
   }
 
@@ -47,6 +56,10 @@ class ActiveGameMapper {
       ..caseId = domain.caseId
       ..stateJson = jsonEncode(cellsMapList)
       ..savedAt = domain.savedAt;
+
+    if (domain.proceduralMetadata != null) {
+      entity.proceduralMetadataJson = jsonEncode(domain.proceduralMetadata!.toJson());
+    }
 
     return entity;
   }

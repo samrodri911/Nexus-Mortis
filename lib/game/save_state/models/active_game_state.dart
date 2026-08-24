@@ -1,3 +1,4 @@
+import 'package:nexus_mortis/game/puzzles/models/generated_case_metadata.dart';
 import 'package:nexus_mortis/game/save_state/models/cell_snapshot.dart';
 
 /// Snapshot inmutable del estado completo de una partida en curso.
@@ -6,9 +7,11 @@ class ActiveGameState {
     required this.caseId,
     required this.cells,
     required this.savedAt,
+    this.proceduralMetadata,
   });
 
   final String caseId;
   final List<CellSnapshot> cells;
   final DateTime savedAt;
+  final GeneratedCaseMetadata? proceduralMetadata;
 }

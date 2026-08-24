@@ -22,13 +22,18 @@ const ActiveGameEntitySchema = CollectionSchema(
       name: r'caseId',
       type: IsarType.string,
     ),
-    r'savedAt': PropertySchema(
+    r'proceduralMetadataJson': PropertySchema(
       id: 1,
+      name: r'proceduralMetadataJson',
+      type: IsarType.string,
+    ),
+    r'savedAt': PropertySchema(
+      id: 2,
       name: r'savedAt',
       type: IsarType.dateTime,
     ),
     r'stateJson': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'stateJson',
       type: IsarType.string,
     )
@@ -54,6 +59,12 @@ int _activeGameEntityEstimateSize(
 ) {
   var bytesCount = offsets.last;
   bytesCount += 3 + object.caseId.length * 3;
+  {
+    final value = object.proceduralMetadataJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.stateJson.length * 3;
   return bytesCount;
 }
@@ -65,8 +76,9 @@ void _activeGameEntitySerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.caseId);
-  writer.writeDateTime(offsets[1], object.savedAt);
-  writer.writeString(offsets[2], object.stateJson);
+  writer.writeString(offsets[1], object.proceduralMetadataJson);
+  writer.writeDateTime(offsets[2], object.savedAt);
+  writer.writeString(offsets[3], object.stateJson);
 }
 
 ActiveGameEntity _activeGameEntityDeserialize(
@@ -78,8 +90,9 @@ ActiveGameEntity _activeGameEntityDeserialize(
   final object = ActiveGameEntity();
   object.caseId = reader.readString(offsets[0]);
   object.id = id;
-  object.savedAt = reader.readDateTime(offsets[1]);
-  object.stateJson = reader.readString(offsets[2]);
+  object.proceduralMetadataJson = reader.readStringOrNull(offsets[1]);
+  object.savedAt = reader.readDateTime(offsets[2]);
+  object.stateJson = reader.readString(offsets[3]);
   return object;
 }
 
@@ -93,8 +106,10 @@ P _activeGameEntityDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 2:
+      return (reader.readDateTime(offset)) as P;
+    case 3:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -388,6 +403,162 @@ extension ActiveGameEntityQueryFilter
   }
 
   QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'proceduralMetadataJson',
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'proceduralMetadataJson',
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'proceduralMetadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'proceduralMetadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'proceduralMetadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'proceduralMetadataJson',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'proceduralMetadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'proceduralMetadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonContains(String value,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'proceduralMetadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'proceduralMetadataJson',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'proceduralMetadataJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
+      proceduralMetadataJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'proceduralMetadataJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterFilterCondition>
       savedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -603,6 +774,20 @@ extension ActiveGameEntityQuerySortBy
   }
 
   QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterSortBy>
+      sortByProceduralMetadataJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'proceduralMetadataJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterSortBy>
+      sortByProceduralMetadataJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'proceduralMetadataJson', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterSortBy>
       sortBySavedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'savedAt', Sort.asc);
@@ -661,6 +846,20 @@ extension ActiveGameEntityQuerySortThenBy
   }
 
   QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterSortBy>
+      thenByProceduralMetadataJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'proceduralMetadataJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterSortBy>
+      thenByProceduralMetadataJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'proceduralMetadataJson', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QAfterSortBy>
       thenBySavedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'savedAt', Sort.asc);
@@ -699,6 +898,14 @@ extension ActiveGameEntityQueryWhereDistinct
   }
 
   QueryBuilder<ActiveGameEntity, ActiveGameEntity, QDistinct>
+      distinctByProceduralMetadataJson({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'proceduralMetadataJson',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, ActiveGameEntity, QDistinct>
       distinctBySavedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'savedAt');
@@ -724,6 +931,13 @@ extension ActiveGameEntityQueryProperty
   QueryBuilder<ActiveGameEntity, String, QQueryOperations> caseIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'caseId');
+    });
+  }
+
+  QueryBuilder<ActiveGameEntity, String?, QQueryOperations>
+      proceduralMetadataJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'proceduralMetadataJson');
     });
   }
 

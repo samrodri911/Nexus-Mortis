@@ -18,4 +18,7 @@ class ActiveGameEntity {
 
   /// Fecha y hora en la que se guardó.
   late DateTime savedAt;
+
+  /// Metadata serializada en JSON si este caso es procedimental.
+  String? proceduralMetadataJson;
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:nexus_mortis/features/home/home_page.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
-import 'package:nexus_mortis/game/puzzles/case_registry.dart';
+import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
 import 'package:nexus_mortis/game/save_state/save_game_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 
@@ -14,11 +14,13 @@ class CaseSelectionPage extends StatelessWidget {
     required this.progressionService,
     required this.saveGameService,
     required this.economyService,
+    required this.proceduralCaseService,
   });
 
   final ProgressionService progressionService;
   final SaveGameService saveGameService;
   final HintEconomyService economyService;
+  final ProceduralCaseService proceduralCaseService;
 
   @override
   Widget build(BuildContext context) {
@@ -30,76 +32,60 @@ class CaseSelectionPage extends StatelessWidget {
       body: ValueListenableBuilder<PlayerProgress>(
         valueListenable: progressionService.progressNotifier,
         builder: (context, progress, _) {
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: CaseRegistry.cases.length,
-            itemBuilder: (context, index) {
-              final caseData = CaseRegistry.cases[index];
-              final isUnlocked = progressionService.isCaseUnlocked(caseData);
-              final isCompleted = progressionService.isCaseCompleted(caseData.id);
-              final caseProgress = progress.completedCases[caseData.id];
-
-              return Card(
-                color: isUnlocked ? const Color(0xFF2C2C34) : const Color(0xFF1A1A1F),
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  title: Text(
-                    caseData.title,
-                    style: TextStyle(
-                      color: isUnlocked ? Colors.white : Colors.white38,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Text(
-                    isUnlocked ? caseData.description : 'Requiere resolver el caso anterior',
-                    style: TextStyle(
-                      color: isUnlocked ? Colors.white70 : Colors.white24,
-                    ),
-                  ),
-                  trailing: _buildTrailing(isUnlocked, isCompleted, caseProgress?.starsEarned),
-                  onTap: isUnlocked
-                      ? () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => HomePage(
-                                caseData: caseData,
-                                progressionService: progressionService,
-                                saveGameService: saveGameService,
-                                economyService: economyService,
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.shield, size: 80, color: Colors.amber),
+                const SizedBox(height: 24),
+                Text(
+                  'Archivos Completados: ${progress.completedCases.length}',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white70),
                 ),
-              );
-            },
+                const SizedBox(height: 8),
+                Text(
+                  'Monedas: ${progress.coins}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.amber),
+                ),
+                const SizedBox(height: 48),
+                ElevatedButton(
+                  onPressed: () async {
+                    // Mostrar un loader
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => const Center(child: CircularProgressIndicator()),
+                    );
+
+                    final nextCase = await proceduralCaseService.getNextCase();
+                    
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop(); // Ocultar loader
+
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => HomePage(
+                          caseData: nextCase,
+                          progressionService: progressionService,
+                          saveGameService: saveGameService,
+                          economyService: economyService,
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  child: const Text('INVESTIGAR SIGUIENTE CASO'),
+                ),
+              ],
+            ),
           );
         },
       ),
     );
-  }
-
-  Widget _buildTrailing(bool isUnlocked, bool isCompleted, int? starsEarned) {
-    if (!isUnlocked) {
-      return const Icon(Icons.lock, color: Colors.white24);
-    }
-
-    if (isCompleted) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$starsEarned',
-            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
-          ),
-          const Icon(Icons.star, color: Colors.amber, size: 16),
-          const SizedBox(width: 8),
-          const Icon(Icons.check_circle, color: Colors.green),
-        ],
-      );
-    }
-
-    return const Icon(Icons.arrow_forward_ios, color: Colors.white54);
   }
 }

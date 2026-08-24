@@ -1,5 +1,6 @@
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/case_origin.dart';
 import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
@@ -21,6 +22,7 @@ class CaseData {
     required this.clues,
     required this.solution,
     this.requiredCaseId,
+    this.origin = CaseOrigin.campaign,
   });
 
   final String id;
@@ -49,4 +51,8 @@ class CaseData {
   /// ID del caso que debe ser completado antes de poder jugar este.
   /// Si es null, el caso está desbloqueado por defecto.
   final String? requiredCaseId;
+
+  /// Origen del caso para sistemas externos (estadísticas, economía, recompensas).
+  /// Por defecto es `CaseOrigin.campaign`.
+  final CaseOrigin origin;
 }

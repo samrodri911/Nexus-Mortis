@@ -3,7 +3,7 @@ import 'package:nexus_mortis/features/case_selection/case_selection_page.dart';
 import 'package:nexus_mortis/features/home/home_page.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
-import 'package:nexus_mortis/game/puzzles/case_registry.dart';
+import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
 import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/save_state/save_game_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
@@ -16,12 +16,14 @@ class ResumeGamePage extends StatelessWidget {
     required this.progressionService,
     required this.saveGameService,
     required this.economyService,
+    required this.proceduralCaseService,
   });
 
   final ActiveGameState saveState;
   final ProgressionService progressionService;
   final SaveGameService saveGameService;
   final HintEconomyService economyService;
+  final ProceduralCaseService proceduralCaseService;
 
   void _onContinue(BuildContext context, CaseData caseData) {
     Navigator.of(context).pushReplacement(
@@ -47,6 +49,7 @@ class ResumeGamePage extends StatelessWidget {
           progressionService: progressionService,
           saveGameService: saveGameService,
           economyService: economyService,
+          proceduralCaseService: proceduralCaseService,
         ),
       ),
     );
@@ -54,18 +57,38 @@ class ResumeGamePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Buscar el caso usando el registry
-    final caseData = CaseRegistry.getCase(saveState.caseId);
-    
-    if (caseData == null) {
-      // Si el caso guardado ya no existe (por actualización), limpiar y salir
-      saveGameService.clearGame();
-      return CaseSelectionPage(
-        progressionService: progressionService,
-        saveGameService: saveGameService,
-        economyService: economyService,
-      );
-    }
+    return FutureBuilder<CaseData?>(
+      future: Future.value(proceduralCaseService.getCaseById(
+        saveState.caseId,
+        metadata: saveState.proceduralMetadata,
+      )),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final caseData = snapshot.data;
+        if (caseData == null) {
+          // Si el caso guardado ya no existe, limpiar y salir
+          saveGameService.clearGame();
+          // Retrasamos la navegación para evitar problemas con el build actual
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => CaseSelectionPage(
+                  progressionService: progressionService,
+                  saveGameService: saveGameService,
+                  economyService: economyService,
+                  proceduralCaseService: proceduralCaseService,
+                ),
+              ),
+            );
+          });
+          return const Scaffold(backgroundColor: Colors.black);
+        }
 
     // Formatear la fecha
     final diff = DateTime.now().difference(saveState.savedAt);
@@ -131,11 +154,12 @@ class ResumeGamePage extends StatelessWidget {
                     child: const Text('Continuar'),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
+      );
+      },
     );
   }
 }

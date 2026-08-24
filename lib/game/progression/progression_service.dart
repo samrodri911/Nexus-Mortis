@@ -38,6 +38,16 @@ class ProgressionService {
     return progress.completedCases.containsKey(caseId);
   }
 
+  /// Devuelve el próximo caso de campaña desbloqueado y no completado.
+  CaseData? getNextCampaignCase(List<CaseData> campaignCases) {
+    for (final caseData in campaignCases) {
+      if (isCaseUnlocked(caseData) && !isCaseCompleted(caseData.id)) {
+        return caseData;
+      }
+    }
+    return null;
+  }
+
   /// Marca un caso como completado y otorga recompensas.
   ///
   /// Es idempotente: si el caso ya estaba completado, no duplica

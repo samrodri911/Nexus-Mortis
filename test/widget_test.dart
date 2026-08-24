@@ -11,6 +11,9 @@ import 'package:nexus_mortis/game/hints/services/hint_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/clues/evaluators/clue_evaluator.dart';
 import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
+import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
+import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
+import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
 
 class MockProgressRepository implements ProgressRepository {
   @override
@@ -45,10 +48,17 @@ void main() {
     final hintService = HintService(clueEvaluator: const ClueEvaluator(SpatialClueEvaluator()));
     final economyService = HintEconomyService(progressionService: progressionService, hintService: hintService);
 
+    final proceduralCaseService = ProceduralCaseService(
+      progressionService: progressionService,
+      staticSource: const StaticCaseSource(),
+      generatedSource: GeneratedCaseSource(),
+    );
+
     await tester.pumpWidget(NexusMortisApp(
       progressionService: progressionService,
       saveGameService: saveGameService,
       economyService: economyService,
+      proceduralCaseService: proceduralCaseService,
     ));
 
     // Verify that the CaseSelectionPage is present on screen.
