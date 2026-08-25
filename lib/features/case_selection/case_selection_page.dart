@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:nexus_mortis/features/home/home_page.dart';
+import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
 import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
 import 'package:nexus_mortis/game/save_state/save_game_service.dart';
-import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
+import 'package:nexus_mortis/game/session/services/game_session_service.dart';
 
 /// Pantalla inicial donde el jugador selecciona el caso a jugar.
 /// Muestra los casos bloqueados y desbloqueados según el [ProgressionService].
@@ -15,12 +16,14 @@ class CaseSelectionPage extends StatelessWidget {
     required this.saveGameService,
     required this.economyService,
     required this.proceduralCaseService,
+    required this.sessionService,
   });
 
   final ProgressionService progressionService;
   final SaveGameService saveGameService;
   final HintEconomyService economyService;
   final ProceduralCaseService proceduralCaseService;
+  final GameSessionService sessionService;
 
   @override
   Widget build(BuildContext context) {
@@ -58,17 +61,17 @@ class CaseSelectionPage extends StatelessWidget {
                     );
 
                     final nextCase = await proceduralCaseService.getNextCase();
-                    
+                    await sessionService.startNewGame(nextCase);
+
                     if (!context.mounted) return;
                     Navigator.of(context).pop(); // Ocultar loader
 
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
                         builder: (_) => HomePage(
-                          caseData: nextCase,
-                          progressionService: progressionService,
-                          saveGameService: saveGameService,
+                          sessionService: sessionService,
                           economyService: economyService,
+                          proceduralCaseService: proceduralCaseService,
                         ),
                       ),
                     );

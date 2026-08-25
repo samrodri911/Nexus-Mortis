@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:nexus_mortis/game/hints/models/hint_cost.dart';
 import 'package:nexus_mortis/game/hints/models/hint_result.dart';
 import 'package:nexus_mortis/game/hints/models/hint_type.dart';
@@ -13,15 +14,17 @@ class HintEconomyService {
     required this.progressionService,
     required this.hintService,
     this.costs = HintCost.defaults,
+    this.onHintPurchased,
   });
 
   final ProgressionService progressionService;
   final HintService hintService;
   final HintCost costs;
+  VoidCallback? onHintPurchased;
 
   /// Intenta comprar una pista.
   /// Si no hay fondos suficientes, retorna null.
-  /// Si hay fondos, descuenta las monedas y retorna la pista generada.
+  /// Si hay fondos, descuenta las monedas, invoca [onHintPurchased] y retorna la pista generada.
   HintResult? buyHint(
     HintType type,
     CaseData caseData,
@@ -31,7 +34,9 @@ class HintEconomyService {
     final cost = _getCost(type);
 
     if (progressionService.spendCoins(cost)) {
-      return hintService.generateHint(type, caseData, state, validationService);
+      final hint = hintService.generateHint(type, caseData, state, validationService);
+      onHintPurchased?.call();
+      return hint;
     }
 
     return null;

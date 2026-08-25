@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
 import 'package:nexus_mortis/game/progression/models/case_progress.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';

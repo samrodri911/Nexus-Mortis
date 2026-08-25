@@ -1,7 +1,9 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:nexus_mortis/data/local/models/achievements_entity.dart';
 import 'package:nexus_mortis/data/local/models/active_game_entity.dart';
 import 'package:nexus_mortis/data/local/models/player_progress_entity.dart';
+import 'package:nexus_mortis/data/local/models/statistics_entity.dart';
 
 /// Gestiona la conexión y configuración inicial de Isar.
 class IsarDatabase {
@@ -14,6 +16,8 @@ class IsarDatabase {
       [
         PlayerProgressEntitySchema,
         ActiveGameEntitySchema,
+        StatisticsEntitySchema,
+        AchievementsEntitySchema,
       ],
       directory: dir.path,
     );

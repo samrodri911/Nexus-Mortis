@@ -98,6 +98,9 @@ class BoardController {
   SuspectData? selectedSuspect;
   ToolMode activeTool = ToolMode.candidate;
 
+  /// Callback invocado cuando ocurre una acción explícita de corrección o error (deshacer/desconfirmar).
+  VoidCallback? onMistakeOccurred;
+
   /// Versión de estado. Cada mutación incrementa este valor.
   /// Los widgets de Flutter pueden usar [ValueListenableBuilder] para
   /// reconstruirse automáticamente cuando el tablero cambia.
@@ -321,14 +324,14 @@ class BoardController {
   }
 
   // ─── EXTENSION POINT: Statistics ──────────────────────────────────────────
-  // Este método se invoca en cada confirmación y desconfirmación.
-  // En una iteración futura registrará métricas de partida:
-  // tiempo de decisión, número de confirmaciones, errores, deshacer, etc.
-  // ignore: unused_element
   void _onConfirmationEvent({
     required String suspectId,
     required CellPosition? position, // null = desconfirmación
-  }) {}
+  }) {
+    if (position == null) {
+      onMistakeOccurred?.call();
+    }
+  }
   // ──────────────────────────────────────────────────────────────────────────
 
   // ─── Exportar estado ──────────────────────────────────────────────────────

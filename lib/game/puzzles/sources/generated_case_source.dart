@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:nexus_mortis/game/generator/models/generation_result.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_generator.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
@@ -19,28 +20,35 @@ class GeneratedCaseSource implements CaseSource {
 
   /// Genera un nuevo caso al vuelo.
   CaseData generateNew(GeneratorConfig config, CaseIdentityFactory identityFactory) {
-    // Si no hay semilla, asignamos una para garantizar reproducibilidad
-    final seed = config.randomSeed ?? DateTime.now().millisecondsSinceEpoch;
-    
-    final finalConfig = GeneratorConfig(
-      rows: config.rows,
-      columns: config.columns,
-      suspectCount: config.suspectCount,
-      objectCount: config.objectCount,
-      targetDifficulty: config.targetDifficulty,
-      minClues: config.minClues,
-      maxClues: config.maxClues,
-      maxAttempts: config.maxAttempts,
-      randomSeed: seed,
-    );
+    final baseSeed = config.randomSeed ?? DateTime.now().millisecondsSinceEpoch;
+    int currentSeed = baseSeed;
+    GenerationResult? result;
 
-    final result = _puzzleGenerator.generate(finalConfig);
-    
+    // Intentar generar con la semilla provista o iterar semillas consecutivas si fue aleatoria
+    for (int attempt = 0; attempt < 5; attempt++) {
+      final attemptConfig = GeneratorConfig(
+        rows: config.rows,
+        columns: config.columns,
+        suspectCount: config.suspectCount,
+        objectCount: config.objectCount,
+        targetDifficulty: config.targetDifficulty,
+        minClues: config.minClues,
+        maxClues: config.maxClues,
+        maxAttempts: config.maxAttempts,
+        randomSeed: currentSeed,
+      );
+
+      result = _puzzleGenerator.generate(attemptConfig);
+      if (result != null) break;
+      if (config.randomSeed != null) break; // Si se especificó una semilla fija, no cambiarla
+      currentSeed++;
+    }
+
     if (result == null) {
       throw StateError('No se pudo generar un puzzle con la configuración provista.');
     }
 
-    final id = identityFactory.createProceduralId(seed);
+    final id = identityFactory.createProceduralId(currentSeed);
     return _copyWithIdentity(result.caseData, id, CaseOrigin.procedural);
   }
 

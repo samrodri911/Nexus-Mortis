@@ -17,6 +17,7 @@ void main() {
         columns: 3,
         suspectCount: 3,
         objectCount: 2,
+        targetDifficulty: DifficultyLevel.easy,
         randomSeed: 999, // Semilla fija
       );
 
