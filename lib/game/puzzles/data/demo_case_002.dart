@@ -1,39 +1,33 @@
+import 'package:nexus_mortis/game/clues/models/object_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 
-/// Caso demostrativo n√∫mero 2.
-/// Se usa para probar el sistema de progresi√≥n y desbloqueo secuencial.
-final CaseData demoCase002 = CaseData(
-  id: 'demo_case_002',
-  title: 'El misterio de la puerta sur',
-  description: 'Un nuevo sospechoso entra a la sala. Descubre d√≥nde se ocultaba.',
-  difficulty: PuzzleDifficulty.easy,
+final demoCase002 = CaseData(
+  id: 'case_002',
+  title: 'El JardÌn Bot·nico',
+  description: 'Tres sospechosos paseaban por el jardÌn...',
+  difficulty: PuzzleDifficulty.medium,
   boardRows: 4,
   boardColumns: 4,
-  requiredCaseId: 'demo_case_001', // Dependencia: requiere completar el 1
+  zones: const [
+    ZoneData(id: 'z1', name: 'Z1', cells: [CellPosition(0,0)])
+  ],
   suspects: const [
     SuspectData(id: 'suspect_luis', name: 'Luis'),
-    SuspectData(id: 'suspect_sofia', name: 'Sofia'),
+    SuspectData(id: 'suspect_marta', name: 'Marta'),
+    SuspectData(id: 'suspect_pedro', name: 'Pedro'),
+    SuspectData(id: 'victim', name: 'VÌctima'),
   ],
+  victimId: 'victim',
+  killerId: 'suspect_luis',
   placedObjects: const [],
-  clues: const [
-    SpatialClueData(
-      id: 'clue_luis_left_sofia',
-      text: 'Luis est√° a la izquierda de Sofia.',
-      relation: SpatialRelation.leftOf,
-      suspectId: 'suspect_luis',
-      targetId: 'suspect_sofia',
-    ),
-  ],
-  solution: const SolutionData(
-    suspectPositions: {
-      'suspect_luis': CellPosition(1, 1),
-      'suspect_sofia': CellPosition(1, 2),
-    },
-  ),
+  clues: const [],
+  solution: const SolutionData(suspectPositions: {}),
 );

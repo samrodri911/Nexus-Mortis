@@ -3,6 +3,7 @@ import 'package:nexus_mortis/game/clues/evaluators/clue_evaluator.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/player/models/player_assignment.dart';
 import 'package:nexus_mortis/game/player/models/player_board_state.dart';
+import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
 import 'package:nexus_mortis/game/validation/models/validation_result.dart';
@@ -12,52 +13,75 @@ import 'package:nexus_mortis/game/validation/models/validation_status.dart';
 /// cruzando sus asignaciones con las pistas y la solución oculta.
 class ValidationService {
   const ValidationService({
-    required this.solution,
-    required this.clues,
-    required this.objectPositions,
+    required this.caseData,
     required this.clueEvaluator,
   });
 
-  /// Solución definitiva oculta del puzzle.
-  final SolutionData solution;
-
-  /// Lista de pistas para evaluar el progreso en tiempo real.
-  final List<SpatialClueData> clues;
-
-  /// Mapa de objetos fijos (ID -> Posición).
-  final Map<String, CellPosition> objectPositions;
+  final CaseData caseData;
 
   /// Evaluador de pistas.
   final ClueEvaluator clueEvaluator;
 
-  /// Valida el estado completo del tablero sin mutar datos.
+  /// Valida el estado completo del tablero exigiendo descartes explícitos.
   ValidationResult validate(PlayerBoardState playerState) {
     // 1. Extraer posiciones activas (solo aquellos sospechosos con exactamente 1 candidato)
     final Map<String, CellPosition> activeAssignments = {};
-    bool hasIncompleteAssignments = false;
+    final assignedCells = <CellPosition>{};
     bool hasIncorrectPlacements = false;
 
-    // Evaluamos también contra la solución, pero esto solo
-    // se usará para dictaminar el estado 'solved' o 'invalid'.
+    // Evaluamos también contra la solución
     for (final PlayerAssignment assignment in playerState.assignments) {
-      if (assignment.candidates.length != 1) {
-        hasIncompleteAssignments = true;
-      } else {
+      if (assignment.candidates.length == 1) {
         final pos = assignment.candidates.first;
         activeAssignments[assignment.suspectId] = pos;
+        assignedCells.add(pos);
 
-        if (solution.suspectPositions[assignment.suspectId] != pos) {
+        if (caseData.solution.suspectPositions[assignment.suspectId] != pos) {
           hasIncorrectPlacements = true;
         }
       }
     }
 
-    // 2. Evaluar pistas usando solo las posiciones activas
+    // Identificar objetos fijos
+    final objectPositions = <String, CellPosition>{};
+    final blockedCells = <CellPosition>{};
+    for (final obj in caseData.placedObjects) {
+      objectPositions[obj.object.id] = obj.position;
+      blockedCells.add(obj.position);
+    }
+
+    // 2. Verificar Completitud Estricta
+    // Un tablero está completo si CADA celda es:
+    // a) Asignada a un personaje
+    // b) Ocupada por un objeto
+    // c) Descartada explícitamente con X (playerState.eliminatedCells)
+    bool isBoardComplete = true;
+    for (int r = 0; r < caseData.boardRows; r++) {
+      for (int c = 0; c < caseData.boardColumns; c++) {
+        final pos = CellPosition(r, c);
+        final isAssigned = assignedCells.contains(pos);
+        final isBlocked = blockedCells.contains(pos);
+        final isEliminated = playerState.eliminatedCells.contains(pos);
+
+        if (!isAssigned && !isBlocked && !isEliminated) {
+          isBoardComplete = false;
+          break;
+        }
+      }
+      if (!isBoardComplete) break;
+    }
+
+    // Verificar que TODOS los sospechosos y víctima estén asignados.
+    if (activeAssignments.length != caseData.suspects.length) {
+      isBoardComplete = false;
+    }
+
+    // 3. Evaluar pistas usando solo las posiciones activas
     int satisfiedClues = 0;
     int unsatisfiedClues = 0;
     int unknownClues = 0;
 
-    for (final clue in clues) {
+    for (final clue in caseData.clues) {
       final result = clueEvaluator.evaluate(
         clue,
         activeAssignments,
@@ -77,31 +101,28 @@ class ValidationService {
       }
     }
 
-    // 3. Determinar el estado lógico
+    // 4. Determinar el estado lógico
     ValidationStatus status;
 
-    if (!hasIncompleteAssignments) {
-      // Todos los sospechosos han sido ubicados.
+    if (isBoardComplete) {
+      // Todos los sospechosos ubicados y 100% celdas explicadas.
       if (!hasIncorrectPlacements && unsatisfiedClues == 0) {
         status = ValidationStatus.solved;
       } else {
         status = ValidationStatus.invalid;
       }
     } else {
-      // Faltan sospechosos por ubicar.
-      // Si existe al menos una pista evaluada (sea correcta o incorrecta), 
-      // el jugador ya empezó a generar información útil: Partial.
+      // Faltan acciones por parte del jugador
       if (satisfiedClues > 0 || unsatisfiedClues > 0) {
         status = ValidationStatus.partial;
       } else {
-        // Todo es desconocido
         status = ValidationStatus.incomplete;
       }
     }
 
     return ValidationResult(
       status: status,
-      totalClues: clues.length,
+      totalClues: caseData.clues.length,
       satisfiedClues: satisfiedClues,
       unsatisfiedClues: unsatisfiedClues,
       unknownClues: unknownClues,

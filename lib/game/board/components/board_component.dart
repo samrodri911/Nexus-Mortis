@@ -1,3 +1,4 @@
+import 'package:nexus_mortis/game/board/components/zone_border_component.dart';
 import 'package:flame/components.dart';
 import 'package:nexus_mortis/game/board/components/cell_component.dart';
 import 'package:nexus_mortis/game/board/controllers/board_controller.dart';

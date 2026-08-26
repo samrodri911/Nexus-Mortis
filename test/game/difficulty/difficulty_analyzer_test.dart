@@ -22,8 +22,8 @@ void main() {
       final analysis = analyzer.analyze(demoCase001);
 
       expect(analysis.solutionCount, equals(1));
-      expect(analysis.clueCount, equals(6));
-      expect(analysis.suspectCount, equals(3));
+      expect(analysis.clueCount, equals(7));
+      expect(analysis.suspectCount, equals(4));
       // DemoCase001 es muy simple, debería ser trivial o easy.
       expect(
         analysis.level == DifficultyLevel.trivial ||
@@ -44,7 +44,7 @@ void main() {
           SuspectData(id: 'a', name: 'A'),
           SuspectData(id: 'b', name: 'B'),
         ],
-        placedObjects: const [],
+        victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: const [],
         clues: const [],
         solution: const SolutionData(suspectPositions: {}),
       );
@@ -67,7 +67,7 @@ void main() {
         suspects: const [
           SuspectData(id: 'juan', name: 'Juan'),
         ],
-        placedObjects: const [
+        victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: const [
           PlacedObjectData(
             object: ObjectData(id: 'cama', name: 'Cama'),
             position: CellPosition(1, 1),

@@ -39,9 +39,7 @@ class NexusGame extends FlameGame {
 
     // 2. Instanciar servicio inyectando el motor de evaluación
     validationService = ValidationService(
-      solution: caseData.solution,
-      clues: caseData.clues,
-      objectPositions: objectPositions,
+      caseData: caseData,
       clueEvaluator: const ClueEvaluator(SpatialClueEvaluator()),
     );
 

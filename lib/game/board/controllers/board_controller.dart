@@ -11,6 +11,7 @@ import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/save_state/models/cell_snapshot.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 
 /// Controla el estado lógico del tablero.
 ///
@@ -28,6 +29,7 @@ class BoardController {
     required this.suspects,
     required this.clues,
     required this.placedObjects,
+    required this.zones,
   });
 
   /// Construye el controlador extrayendo solo lo necesario del [CaseData].
@@ -60,6 +62,7 @@ class BoardController {
       suspects: caseData.suspects,
       clues: caseData.clues,
       placedObjects: caseData.placedObjects,
+      zones: caseData.zones,
     );
   }
 
@@ -94,6 +97,7 @@ class BoardController {
   final List<SuspectData> suspects;
   final List<SpatialClueData> clues;
   final List<PlacedObjectData> placedObjects;
+  final List<ZoneData> zones;
 
   SuspectData? selectedSuspect;
   ToolMode activeTool = ToolMode.candidate;

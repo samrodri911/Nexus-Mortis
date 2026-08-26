@@ -1,3 +1,4 @@
+import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_mortis/game/clues/evaluators/clue_evaluator.dart';
 import 'package:nexus_mortis/game/hints/models/hint_type.dart';
@@ -42,12 +43,7 @@ void main() {
         progressionService: progressionService,
         hintService: hintService,
       );
-      validationService = ValidationService(
-        solution: dummyCase.solution,
-        clues: dummyCase.clues,
-        objectPositions: { for (var obj in dummyCase.placedObjects) obj.object.id: obj.position },
-        clueEvaluator: const ClueEvaluator(SpatialClueEvaluator()),
-      );
+      validationService = ValidationService(caseData: dummyCase, clueEvaluator: const ClueEvaluator(SpatialClueEvaluator()));
     });
 
     test('buyHint reduce monedas si hay suficientes', () {

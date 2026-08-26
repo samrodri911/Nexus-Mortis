@@ -13,7 +13,7 @@ class ResultsPage extends StatefulWidget {
 
   final GameResult result;
   final List<AchievementDefinition> unlockedAchievements;
-  final VoidCallback onContinue;
+  final void Function(BuildContext) onContinue;
 
   @override
   State<ResultsPage> createState() => _ResultsPageState();
@@ -305,7 +305,7 @@ class _ResultsPageState extends State<ResultsPage>
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: widget.onContinue,
+                        onPressed: () => widget.onContinue(context),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.amber,
                           foregroundColor: Colors.black,

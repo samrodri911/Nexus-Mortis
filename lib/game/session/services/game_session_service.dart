@@ -155,9 +155,13 @@ class GameSessionService {
     return session;
   }
 
+  bool _isPausing = false;
+
   /// Pausa la partida activa actual y persiste el estado del tablero.
   /// Es idempotente y seguro ante múltiples llamadas de ciclo de vida.
   Future<void> pauseGame() async {
+    if (_isPausing) return;
+
     final session = currentSession;
     if (session == null) {
       return;
@@ -167,6 +171,9 @@ class GameSessionService {
     if (session.status != GameSessionStatus.playing) {
       return;
     }
+
+    _isPausing = true;
+    try {
 
     if (_lastActiveSegmentStart != null) {
       _accumulatedDuration += DateTime.now().difference(_lastActiveSegmentStart!);
@@ -181,6 +188,9 @@ class GameSessionService {
       status: GameSessionStatus.paused,
       pausedAt: DateTime.now(),
     );
+    } finally {
+      _isPausing = false;
+    }
   }
 
   /// Abandona la partida actual, eliminando el estado guardado en disco y limpiando la sesión.
@@ -198,11 +208,19 @@ class GameSessionService {
     clearSession();
   }
 
+  bool _isCompleting = false;
+
   /// Completa la partida actual de forma atómica e idempotente.
   ///
   /// Calcula estrellas, recompensas, genera el [GameResult], actualiza el progreso,
   /// registra estadísticas, evalúa logros y limpia el guardado en disco.
   Future<GameResult> completeGame() async {
+    if (_isCompleting) {
+      // Si ya está completando, esperamos a que termine verificando el estado de la sesión,
+      // aunque en la arquitectura actual UI previene esta concurrencia.
+      throw StateError('Game is already being completed.');
+    }
+
     final session = currentSession;
     if (session == null) {
       throw StateError('No active session to complete.');
@@ -217,6 +235,9 @@ class GameSessionService {
         session.status != GameSessionStatus.paused) {
       throw StateError('Cannot complete game from state: ${session.status}');
     }
+
+    _isCompleting = true;
+    try {
 
     // 1. Calcular duración total activa
     if (_lastActiveSegmentStart != null) {
@@ -286,6 +307,9 @@ class GameSessionService {
     );
 
     return result;
+    } finally {
+      _isCompleting = false;
+    }
   }
 
   /// Limpia las referencias en memoria de la sesión activa.

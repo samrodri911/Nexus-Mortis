@@ -1,3 +1,5 @@
+import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +20,12 @@ void main() {
         columns: 2,
         suspects: suspects,
         objects: objects,
+        victimId: suspects[1].id,
+        killerId: suspects.first.id,
+        zones: const [
+          ZoneData(id: 'z1', name: 'Z1', cells: [CellPosition(0,0), CellPosition(1,1)]),
+          ZoneData(id: 'z2', name: 'Z2', cells: [CellPosition(0,1), CellPosition(1,0)]),
+        ],
       );
 
       expect(result.solution.suspectPositions.length, 2);
@@ -42,6 +50,12 @@ void main() {
           columns: 2, // Solo caben 4 celdas en total
           suspects: suspects,
           objects: objects,
+          victimId: suspects[1].id,
+          killerId: suspects.first.id,
+          zones: const [
+            ZoneData(id: 'z1', name: 'Z1', cells: [CellPosition(0,0), CellPosition(1,1)]),
+            ZoneData(id: 'z2', name: 'Z2', cells: [CellPosition(0,1), CellPosition(1,0)]),
+          ],
         ),
         throwsArgumentError,
       );

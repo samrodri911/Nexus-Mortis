@@ -11,6 +11,7 @@ import 'package:nexus_mortis/game/generator/services/difficulty_calibrator.dart'
 import 'package:nexus_mortis/game/generator/services/object_placer.dart';
 import 'package:nexus_mortis/game/generator/services/solution_generator.dart';
 import 'package:nexus_mortis/game/generator/services/uniqueness_validator.dart';
+import 'package:nexus_mortis/game/generator/services/zone_generator.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
@@ -35,6 +36,8 @@ class PuzzleGenerator {
     if (config.suspectCount + config.objectCount > config.rows * config.columns) {
       return null;
     }
+    // Need at least 2 suspects (1 victim, 1 killer)
+    if (config.suspectCount < 2) return null;
 
     final rand = config.randomSeed != null ? Random(config.randomSeed) : Random();
     
@@ -56,12 +59,30 @@ class PuzzleGenerator {
       final suspects = objectPlacer.selectSuspects(config.suspectCount);
       final objects = objectPlacer.selectObjects(config.objectCount);
 
-      final solutionResult = solutionGenerator.generateSolution(
-        rows: config.rows,
-        columns: config.columns,
-        suspects: suspects,
-        objects: objects,
-      );
+      // Designate victim and killer randomly
+      final shuffledSuspects = List.of(suspects)..shuffle(rand);
+      final victimId = shuffledSuspects[0].id;
+      final killerId = shuffledSuspects[1].id;
+
+      // Target zones: roughly grid size / 3, min 2, max 5.
+      final targetZones = (config.rows * config.columns / 4).clamp(2, 5).toInt();
+      final zones = ZoneGenerator.generateZones(config.rows, config.columns, targetZones, rand);
+
+      late final ({dynamic solution, dynamic objectPositions}) solutionResult;
+      try {
+        solutionResult = solutionGenerator.generateSolution(
+          rows: config.rows,
+          columns: config.columns,
+          suspects: suspects,
+          objects: objects,
+          zones: zones,
+          victimId: victimId,
+          killerId: killerId,
+        );
+      } catch (_) {
+        // Solution generation might fail if zones are drawn poorly making it impossible to satisfy Murdoku+Zone constraints.
+        continue;
+      }
 
       final solution = solutionResult.solution;
       final objectPositions = solutionResult.objectPositions;
@@ -86,7 +107,10 @@ class PuzzleGenerator {
         difficulty: _mapDifficulty(config.targetDifficulty ?? DifficultyLevel.medium),
         boardRows: config.rows,
         boardColumns: config.columns,
+        zones: zones,
         suspects: suspects,
+        victimId: victimId,
+        killerId: killerId,
         placedObjects: placedObjects,
         clues: allClues,
         solution: solution,
@@ -101,16 +125,19 @@ class PuzzleGenerator {
       if (config.maxClues != null && finalClues.length > config.maxClues!) continue;
 
       tempCase = CaseData(
-        id: caseIdPrefix,
+        id: tempCase.id,
         title: tempCase.title,
         description: tempCase.description,
         difficulty: tempCase.difficulty,
-        boardRows: config.rows,
-        boardColumns: config.columns,
-        suspects: suspects,
-        placedObjects: placedObjects,
+        boardRows: tempCase.boardRows,
+        boardColumns: tempCase.boardColumns,
+        zones: tempCase.zones,
+        suspects: tempCase.suspects,
+        victimId: tempCase.victimId,
+        killerId: tempCase.killerId,
+        placedObjects: tempCase.placedObjects,
         clues: finalClues,
-        solution: solution,
+        solution: tempCase.solution,
       );
 
       final nodes = uniquenessValidator.validate(tempCase);
@@ -128,7 +155,10 @@ class PuzzleGenerator {
         difficulty: _mapDifficulty(analysis.level),
         boardRows: tempCase.boardRows,
         boardColumns: tempCase.boardColumns,
+        zones: tempCase.zones,
         suspects: tempCase.suspects,
+        victimId: tempCase.victimId,
+        killerId: tempCase.killerId,
         placedObjects: tempCase.placedObjects,
         clues: tempCase.clues,
         solution: tempCase.solution,

@@ -1,0 +1,759 @@
+--- a/lib/features/case_selection/case_selection_page.dart
++++ b/lib/features/case_selection/case_selection_page.dart
+@@ -1,9 +1,8 @@
+ import 'package:flutter/material.dart';
+-import 'package:nexus_mortis/game/puzzles/case_registry.dart';
+ import 'package:nexus_mortis/game/progression/models/player_progress.dart';
+ import 'package:nexus_mortis/game/progression/progression_service.dart';
+ import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
+-import 'package:nexus_mortis/game/save_state/save_game_service.dart';
++import 'package:nexus_mortis/game/puzzles/case_registry.dart';
+ import 'package:nexus_mortis/features/home/home_page.dart';
+ import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
+ import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
+@@ -15,110 +14,56 @@
+ /// - Banner de sesin pausada (si existe), redirigiendo a [ResumeGamePage].
+ /// - Lista de casos de campaa con estado de bloqueo y estrellas obtenidas.
+ /// - Modo "Investigacin Infinita" cuando toda la campaa est completada.
++///
++/// Arquitectura:
++/// - Solo consume [progressionService.progressNotifier] y [sessionService.sessionNotifier].
++/// - NO accede a [SaveGameService], [ActiveGameRepository] ni a Isar directamente.
++/// - Delega la decisin del prximo caso procedural a [ProceduralCaseService].
+ class CaseSelectionPage extends StatelessWidget {
+   const CaseSelectionPage({
+     super.key,
+     required this.progressionService,
+-    required this.saveGameService,
+     required this.economyService,
+     required this.proceduralCaseService,
+     required this.sessionService,
+   });
+ 
+   final ProgressionService progressionService;
+-  final SaveGameService saveGameService;
+   final HintEconomyService economyService;
+   final ProceduralCaseService proceduralCaseService;
+   final GameSessionService sessionService;
+ 
+-  Future<void> _startCase(BuildContext context, CaseData caseData) async {
+-    // Validar de nuevo que est desbloqueado por si acaso
+-    if (!progressionService.isCaseUnlocked(caseData)) return;
+-
+-    // Prevenir iniciar si ya hay otra partida en memoria (defensa profunda)
+-    if (sessionService.hasActiveSession) {
+-      ScaffoldMessenger.of(context).showSnackBar(
+-        const SnackBar(content: Text('Ya hay una partida en memoria. Abandnala primero.')),
+-      );
+-      return;
+-    }
+-
++  void _startCase(BuildContext context, CaseData caseData) {
+     Navigator.of(context).pushReplacement(
+       MaterialPageRoute(
+         builder: (_) => HomePage(
+           progressionService: progressionService,
+-          saveGameService: saveGameService,
+           economyService: economyService,
+           proceduralCaseService: proceduralCaseService,
+           sessionService: sessionService,
+-          initialCase: caseData,
++          caseToStart: caseData,
+         ),
+       ),
+     );
+   }
+ 
+-  Future<void> _resumeActiveGame(BuildContext context) async {
+-    // Usamos el flujo de HomePage sin caseData para que HomePage intente reanudar
++  void _startProcedural(BuildContext context) async {
++    final nextCase = await proceduralCaseService.getNextCase();
+     Navigator.of(context).pushReplacement(
+       MaterialPageRoute(
+         builder: (_) => HomePage(
+           progressionService: progressionService,
+-          saveGameService: saveGameService,
+           economyService: economyService,
+           proceduralCaseService: proceduralCaseService,
+           sessionService: sessionService,
++          caseToStart: nextCase,
+         ),
+       ),
+     );
+   }
+ 
+-  Future<void> _startProcedural(BuildContext context) async {
+-    // El jugador quiere jugar un caso infinito
+-    // Le pedimos al ProceduralCaseService que lo genere (o nos d el siguiente de la campaa si hay error)
+-    final nextCase = await proceduralCaseService.getNextCase();
+-    
++  void _resumePaused(BuildContext context) {
+     Navigator.of(context).pushReplacement(
+       MaterialPageRoute(
+         builder: (_) => HomePage(
+           progressionService: progressionService,
+-          saveGameService: saveGameService,
+           economyService: economyService,
+           proceduralCaseService: proceduralCaseService,
+           sessionService: sessionService,
+-          initialCase: nextCase,
+         ),
+       ),
+     );
+@@ -128,47 +73,43 @@
+   Widget build(BuildContext context) {
+     return Scaffold(
+       backgroundColor: const Color(0xFF151515),
+-      appBar: AppBar(
+-        backgroundColor: Colors.transparent,
+-        elevation: 0,
+-        title: const Text('NEXUS MORTIS', style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.bold)),
+-        centerTitle: true,
+-      ),
+       body: SafeArea(
+         child: Column(
+           children: [
+             // Header de progreso (Monedas, Estrellas)
+             ValueListenableBuilder<PlayerProgress>(
+               valueListenable: progressionService.progressNotifier,
+-              builder: (context, progress, child) {
+-                return Padding(
+-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+-                  child: Row(
+-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+-                    children: [
+-                      Row(
+-                        children: [
+-                          const Icon(Icons.star, color: Colors.amber, size: 20),
+-                          const SizedBox(width: 4),
+-                          Text('${progress.totalStars}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+-                        ],
+-                      ),
+-                      Row(
+-                        children: [
+-                          const Icon(Icons.monetization_on, color: Colors.yellow, size: 20),
+-                          const SizedBox(width: 4),
+-                          Text('${progress.coins}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+-                        ],
+-                      ),
+-                    ],
+-                  ),
+-                );
+-              },
++              builder: (context, progress, child) => _Header(progress: progress),
+             ),
+-            
+             // Contenido principal (lista de casos)
+             Expanded(
+-              child: FutureBuilder<GameSession?>(
+-                // Chequear si hay un juego activo guardado en disco
+-                future: _checkForSavedGame(),
+-                builder: (context, snapshot) {
+-                  final savedSession = snapshot.data;
+-                  final isGameActive = savedSession != null;
+-
+-                  return ValueListenableBuilder<PlayerProgress>(
+-                    valueListenable: progressionService.progressNotifier,
+-                    builder: (context, progress, child) {
+-                      final allCampaignCompleted = progressionService.getNextCampaignCase(CaseRegistry.cases) == null;
+-
+-                      return ListView(
+-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+-                        children: [
+-                          // Banner de Continuar Partida si existe
+-                          if (isGameActive) ...[
+-                            _buildActiveGameBanner(context),
+-                            const SizedBox(height: 24),
+-                          ],
+-
+-                          const Text(
+-                            'Expedientes',
+-                            style: TextStyle(color: Colors.white70, fontSize: 14, letterSpacing: 2, fontWeight: FontWeight.bold),
+-                          ),
+-                          const SizedBox(height: 12),
+-
+-                          // Lista de Casos
+-                          ...CaseRegistry.cases.map((caseData) {
+-                            final isUnlocked = progressionService.isCaseUnlocked(caseData);
+-                            final caseProgress = progress.completedCases[caseData.id];
+-                            final isCompleted = caseProgress != null;
+-                            final stars = caseProgress?.starsEarned ?? 0;
+-
+-                            return _buildCaseCard(
+-                              context,
+-                              caseData,
+-                              isUnlocked: isUnlocked,
+-                              isCompleted: isCompleted,
+-                              stars: stars,
+-                              onTap: isUnlocked && !isGameActive ? () => _startCase(context, caseData) : null,
+-                              isDisabledByActiveGame: isUnlocked && isGameActive,
+-                            );
+-                          }),
+-
+-                          // Botn de Investigacin Infinita
+-                          if (allCampaignCompleted) ...[
+-                            const SizedBox(height: 24),
+-                            _buildProceduralBanner(context, isDisabledByActiveGame: isGameActive),
+-                          ],
+-                        ],
+-                      );
+-                    },
+-                  );
+-                },
++              child: ValueListenableBuilder<GameSession?>(
++                valueListenable: sessionService.sessionNotifier,
++                builder: (context, session, _) {
++                  return ValueListenableBuilder<PlayerProgress>(
++                    valueListenable: progressionService.progressNotifier,
++                    builder: (context, progress, _) {
++                      return _Body(
++                        progress: progress,
++                        session: session,
++                        progressionService: progressionService,
++                        onStartCase: (c) => _startCase(context, c),
++                        onStartProcedural: () => _startProcedural(context),
++                        onResumePaused: () => _resumePaused(context),
++                      );
++                    },
++                  );
++                },
+               ),
+             ),
+           ],
+         ),
+       ),
+     );
+   }
++}
+ 
+-  Future<GameSession?> _checkForSavedGame() async {
+-    // Primero verificamos si hay uno activo en el servicio de sesin en memoria
+-    if (sessionService.currentSession != null) {
+-      return sessionService.currentSession;
+-    }
+-    // Sino, verificamos si hay uno guardado en disco
+-    final savedState = await saveGameService.loadGame();
+-    if (savedState != null) {
+-      return GameSession(
+-        caseId: savedState.caseId,
+-        origin: CaseOrigin.campaign, // Por ahora asumimos campaa, aunque podra ser procedural
+-        status: GameSessionStatus.paused,
+-        startedAt: savedState.savedAt,
+-      );
+-    }
+-    return null;
+-  }
+-
+-  Widget _buildActiveGameBanner(BuildContext context) {
+-    return Container(
+-      padding: const EdgeInsets.all(16),
+-      decoration: BoxDecoration(
+-        color: Colors.amber.withValues(alpha: 0.1),
+-        borderRadius: BorderRadius.circular(10),
+-        border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+-      ),
+-      child: Column(
+-        crossAxisAlignment: CrossAxisAlignment.start,
+-        children: [
+-          const Row(
+-            children: [
+-              Icon(Icons.warning_amber_rounded, color: Colors.amber),
+-              SizedBox(width: 8),
+-              Text('Partida en curso', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16)),
+-            ],
+-          ),
+-          const SizedBox(height: 8),
+-          const Text(
+-            'Tienes una investigacin sin terminar. No puedes iniciar un nuevo caso hasta completarla o abandonarla.',
+-            style: TextStyle(color: Colors.white70, fontSize: 13),
+-          ),
+-          const SizedBox(height: 16),
+-          SizedBox(
+-            width: double.infinity,
+-            child: ElevatedButton(
+-              onPressed: () => _resumeActiveGame(context),
+-              style: ElevatedButton.styleFrom(
+-                backgroundColor: Colors.amber,
+-                foregroundColor: Colors.black,
+-                padding: const EdgeInsets.symmetric(vertical: 12),
+-              ),
+-              child: const Text('CONTINUAR PARTIDA', style: TextStyle(fontWeight: FontWeight.bold)),
+-            ),
+-          ),
+-        ],
+-      ),
+-    );
+-  }
+-
+-  Widget _buildCaseCard(
+-    BuildContext context,
+-    CaseData caseData, {
+-    required bool isUnlocked,
+-    required bool isCompleted,
+-    required int stars,
+-    required VoidCallback? onTap,
+-    required bool isDisabledByActiveGame,
+-  }) {
++class _Header extends StatelessWidget {
++  const _Header({required this.progress});
++
++  final PlayerProgress progress;
++
++  @override
++  Widget build(BuildContext context) {
+     return Padding(
+-      padding: const EdgeInsets.only(bottom: 12),
+-      child: InkWell(
+-        onTap: onTap,
+-        borderRadius: BorderRadius.circular(12),
+-        child: Container(
+-          padding: const EdgeInsets.all(16),
+-          decoration: BoxDecoration(
+-            color: const Color(0xFF1E1E24),
+-            borderRadius: BorderRadius.circular(12),
+-            border: Border.all(
+-              color: isCompleted ? Colors.amber.withValues(alpha: 0.5) : const Color(0xFF2C2C35),
+-              width: isCompleted ? 1.5 : 1,
+-            ),
+-          ),
+-          child: Row(
+-            children: [
+-              // Icono / Estado
+-              Container(
+-                width: 40,
+-                height: 40,
+-                decoration: BoxDecoration(
+-                  color: isUnlocked ? (isCompleted ? Colors.amber.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05)) : Colors.black12,
+-                  shape: BoxShape.circle,
+-                ),
+-                child: Icon(
+-                  isUnlocked ? (isCompleted ? Icons.check : Icons.folder_open) : Icons.lock,
+-                  color: isUnlocked ? (isCompleted ? Colors.amber : Colors.white70) : Colors.white24,
+-                ),
+-              ),
+-              const SizedBox(width: 16),
+-              
+-              // Ttulo
+-              Expanded(
+-                child: Column(
+-                  crossAxisAlignment: CrossAxisAlignment.start,
+-                  children: [
+-                    Text(
+-                      caseData.title,
+-                      style: TextStyle(
+-                        color: isUnlocked ? (isDisabledByActiveGame ? Colors.white38 : Colors.white) : Colors.white38,
+-                        fontSize: 16,
+-                        fontWeight: FontWeight.bold,
+-                      ),
+-                    ),
+-                    if (isUnlocked) ...[
+-                      const SizedBox(height: 4),
+-                      Text(
+-                        caseData.description,
+-                        style: TextStyle(
+-                          color: isDisabledByActiveGame ? Colors.white24 : Colors.white54,
+-                          fontSize: 13,
+-                        ),
+-                        maxLines: 1,
+-                        overflow: TextOverflow.ellipsis,
+-                      ),
+-                    ],
+-                  ],
+-                ),
+-              ),
+-              
+-              // Estrellas
+-              if (isUnlocked)
+-                Row(
+-                  children: List.generate(3, (index) {
+-                    return Icon(
+-                      index < stars ? Icons.star : Icons.star_border,
+-                      color: index < stars ? (isDisabledByActiveGame ? Colors.amber.withValues(alpha: 0.5) : Colors.amber) : Colors.white24,
+-                      size: 16,
+-                    );
+-                  }),
+-                ),
+-            ],
+-          ),
+-        ),
+-      ),
+-    );
+-  }
+-
+-  Widget _buildProceduralBanner(BuildContext context, {required bool isDisabledByActiveGame}) {
+-    return Container(
+-      padding: const EdgeInsets.all(20),
+-      decoration: BoxDecoration(
+-        gradient: const LinearGradient(
+-          colors: [Color(0xFF2A2A35), Color(0xFF1E1E24)],
+-          begin: Alignment.topLeft,
+-          end: Alignment.bottomRight,
+-        ),
+-        borderRadius: BorderRadius.circular(16),
+-        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+-      ),
+-      child: Column(
+-        children: [
+-          const Icon(Icons.all_inclusive, color: Colors.amber, size: 40),
+-          const SizedBox(height: 12),
+-          const Text(
+-            'MODO INFINITO',
+-            style: TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+-          ),
+-          const SizedBox(height: 8),
+-          const Text(
+-            'Has completado todos los expedientes oficiales. Resuelve casos generados procedimentalmente infinitos.',
+-            textAlign: TextAlign.center,
+-            style: TextStyle(color: Colors.white70, fontSize: 14),
+-          ),
+-          const SizedBox(height: 20),
+-          SizedBox(
+-            width: double.infinity,
+-            child: ElevatedButton(
+-              onPressed: isDisabledByActiveGame ? null : () => _startProcedural(context),
+-              style: ElevatedButton.styleFrom(
+-                backgroundColor: Colors.amber,
+-                foregroundColor: Colors.black,
+-                disabledBackgroundColor: Colors.amber.withValues(alpha: 0.2),
+-                disabledForegroundColor: Colors.white38,
+-                padding: const EdgeInsets.symmetric(vertical: 16),
+-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+-              ),
+-              child: const Text('NUEVO CASO ALEATORIO', style: TextStyle(fontWeight: FontWeight.bold)),
+-            ),
+-          ),
++      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
++      child: Row(
++        mainAxisAlignment: MainAxisAlignment.spaceBetween,
++        children: [
++          Row(
++            children: [
++              const Icon(Icons.star, color: Colors.amber, size: 20),
++              const SizedBox(width: 4),
++              Text(
++                '${progress.totalStars}',
++                style: const TextStyle(
++                  color: Colors.white,
++                  fontSize: 16,
++                  fontWeight: FontWeight.bold,
++                ),
++              ),
++            ],
++          ),
++          Row(
++            children: [
++              const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
++              const SizedBox(width: 4),
++              Text(
++                '${progress.coins}',
++                style: const TextStyle(
++                  color: Colors.white,
++                  fontSize: 16,
++                  fontWeight: FontWeight.bold,
++                ),
++              ),
++            ],
++          ),
+         ],
+       ),
+     );
+   }
+ }
++
++class _Body extends StatelessWidget {
++  const _Body({
++    required this.progress,
++    required this.session,
++    required this.progressionService,
++    required this.onStartCase,
++    required this.onStartProcedural,
++    required this.onResumePaused,
++  });
++
++  final PlayerProgress progress;
++  final GameSession? session;
++  final ProgressionService progressionService;
++  final void Function(CaseData) onStartCase;
++  final VoidCallback onStartProcedural;
++  final VoidCallback onResumePaused;
++
++  bool get _hasPausedSession =>
++      session?.status == GameSessionStatus.paused;
++
++  bool get _campaignComplete =>
++      progressionService.getNextCampaignCase(CaseRegistry.cases) == null;
++
++  @override
++  Widget build(BuildContext context) {
++    return ListView(
++      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
++      children: [
++        // Banner de sesin pausada
++        if (_hasPausedSession) ...[
++          _PausedBanner(onResume: onResumePaused),
++          const SizedBox(height: 12),
++        ],
++
++        // Ttulo de la seccin de campaa
++        const Padding(
++          padding: EdgeInsets.symmetric(vertical: 8),
++          child: Text(
++            'EXPEDIENTES',
++            style: TextStyle(
++              color: Colors.white38,
++              fontSize: 11,
++              letterSpacing: 2,
++              fontWeight: FontWeight.bold,
++            ),
++          ),
++        ),
++
++        // Lista de casos de campaa
++        ...CaseRegistry.cases.map((caseData) {
++          final isUnlocked = progressionService.isCaseUnlocked(caseData);
++          final caseProgress = progress.completedCases[caseData.id];
++          final isCompleted = caseProgress != null;
++          final stars = caseProgress?.starsEarned ?? 0;
++
++          return _CaseCard(
++            caseData: caseData,
++            isUnlocked: isUnlocked,
++            isCompleted: isCompleted,
++            starsEarned: stars,
++            onTap: isUnlocked ? () => onStartCase(caseData) : null,
++          );
++        }),
++
++        // Modo Investigacin Infinita (solo si la campaa est completa)
++        if (_campaignComplete) ...[
++          const SizedBox(height: 16),
++          const Padding(
++            padding: EdgeInsets.symmetric(vertical: 8),
++            child: Text(
++              'INVESTIGACIN INFINITA',
++              style: TextStyle(
++                color: Colors.white38,
++                fontSize: 11,
++                letterSpacing: 2,
++                fontWeight: FontWeight.bold,
++              ),
++            ),
++          ),
++          _InfiniteInvestigationCard(onTap: onStartProcedural),
++        ],
++
++        const SizedBox(height: 24),
++      ],
++    );
++  }
++}
++
++class _PausedBanner extends StatelessWidget {
++  const _PausedBanner({required this.onResume});
++
++  final VoidCallback onResume;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
++      decoration: BoxDecoration(
++        color: Colors.amber.withValues(alpha: 0.1),
++        borderRadius: BorderRadius.circular(10),
++        border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
++      ),
++      child: Row(
++        children: [
++          const Icon(Icons.pause_circle_outline, color: Colors.amber),
++          const SizedBox(width: 12),
++          const Expanded(
++            child: Text(
++              'Tienes una investigacin en curso',
++              style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
++            ),
++          ),
++          TextButton(
++            onPressed: onResume,
++            style: TextButton.styleFrom(foregroundColor: Colors.amber),
++            child: const Text('CONTINUAR'),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _CaseCard extends StatelessWidget {
++  const _CaseCard({
++    required this.caseData,
++    required this.isUnlocked,
++    required this.isCompleted,
++    required this.starsEarned,
++    required this.onTap,
++  });
++
++  final CaseData caseData;
++  final bool isUnlocked;
++  final bool isCompleted;
++  final int starsEarned;
++  final VoidCallback? onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: 10),
++      child: InkWell(
++        onTap: onTap,
++        borderRadius: BorderRadius.circular(10),
++        child: Container(
++          padding: const EdgeInsets.all(16),
++          decoration: BoxDecoration(
++            color: const Color(0xFF1E1E24),
++            borderRadius: BorderRadius.circular(10),
++            border: Border.all(
++              color: isCompleted
++                  ? Colors.amber.withValues(alpha: 0.4)
++                  : const Color(0xFF2E2E3E),
++            ),
++          ),
++          child: Row(
++            children: [
++              // Icono de estado
++              _StatusIcon(
++                isUnlocked: isUnlocked,
++                isCompleted: isCompleted,
++              ),
++              const SizedBox(width: 14),
++              // Ttulo y descripcin
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(
++                      caseData.title,
++                      style: TextStyle(
++                        color: isUnlocked ? Colors.white : Colors.white38,
++                        fontWeight: FontWeight.bold,
++                        fontSize: 15,
++                      ),
++                    ),
++                    if (isUnlocked) ...[
++                      const SizedBox(height: 2),
++                      Text(
++                        caseData.description,
++                        style: const TextStyle(
++                          color: Colors.white54,
++                          fontSize: 12,
++                        ),
++                        maxLines: 1,
++                        overflow: TextOverflow.ellipsis,
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++              const SizedBox(width: 8),
++              // Estrellas (solo si fue completado o est desbloqueado)
++              if (isUnlocked)
++                _StarRow(stars: starsEarned, completed: isCompleted),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _StatusIcon extends StatelessWidget {
++  const _StatusIcon({required this.isUnlocked, required this.isCompleted});
++
++  final bool isUnlocked;
++  final bool isCompleted;
++
++  @override
++  Widget build(BuildContext context) {
++    if (!isUnlocked) {
++      return const Icon(Icons.lock_outline, color: Colors.white24, size: 28);
++    }
++    if (isCompleted) {
++      return const Icon(Icons.check_circle_outline,
++          color: Colors.amber, size: 28);
++    }
++    return const Icon(Icons.folder_outlined, color: Colors.white70, size: 28);
++  }
++}
++
++class _StarRow extends StatelessWidget {
++  const _StarRow({required this.stars, required this.completed});
++
++  final int stars;
++  final bool completed;
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      mainAxisSize: MainAxisSize.min,
++      children: List.generate(3, (i) {
++        final earned = completed && i < stars;
++        return Icon(
++          earned ? Icons.star : Icons.star_border,
++          color: earned ? Colors.amber : Colors.white24,
++          size: 16,
++        );
++      }),
++    );
++  }
++}
++
++class _InfiniteInvestigationCard extends StatelessWidget {
++  const _InfiniteInvestigationCard({required this.onTap});
++
++  final VoidCallback onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    return InkWell(
++      onTap: onTap,
++      borderRadius: BorderRadius.circular(10),
++      child: Container(
++        padding: const EdgeInsets.all(16),
++        decoration: BoxDecoration(
++          color: const Color(0xFF1A1A0A),
++          borderRadius: BorderRadius.circular(10),
++          border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
++        ),
++        child: Row(
++          children: [
++            const Icon(Icons.all_inclusive, color: Colors.amber, size: 28),
++            const SizedBox(width: 14),
++            Expanded(
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  const Text(
++                    'Investigacin Infinita',
++                    style: TextStyle(
++                      color: Colors.amber,
++                      fontWeight: FontWeight.bold,
++                      fontSize: 15,
++                    ),
++                  ),
++                  const SizedBox(height: 2),
++                  Text(
++                    'Un nuevo caso te espera',
++                    style: TextStyle(
++                      color: Colors.amber.withValues(alpha: 0.6),
++                      fontSize: 12,
++                    ),
++                  ),
++                ],
++              ),
++            ),
++            const Icon(Icons.arrow_forward_ios,
++                color: Colors.amber, size: 16),
++          ],
++        ),
++      ),
++    );
++  }
++}

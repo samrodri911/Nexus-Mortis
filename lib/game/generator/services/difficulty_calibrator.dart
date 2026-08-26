@@ -16,8 +16,18 @@ class DifficultyCalibrator {
     DifficultyLevel? targetDifficulty,
   ) {
     final analysis = _analyzer.analyze(caseData);
-    if (targetDifficulty != null && analysis.level != targetDifficulty) {
-      return null;
+    if (targetDifficulty != null) {
+      bool isAcceptable = analysis.level == targetDifficulty;
+      
+      // Permitir flexibilidades mapeadas a la misma PuzzleDifficulty visual
+      if (targetDifficulty == DifficultyLevel.easy && analysis.level == DifficultyLevel.trivial) {
+        isAcceptable = true;
+      }
+      if (targetDifficulty == DifficultyLevel.hard && analysis.level == DifficultyLevel.expert) {
+        isAcceptable = true;
+      }
+      
+      if (!isAcceptable) return null;
     }
     return analysis;
   }

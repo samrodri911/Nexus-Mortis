@@ -27,7 +27,7 @@ void main() {
         boardRows: 3,
         boardColumns: 3,
         suspects: [],
-        placedObjects: [],
+        victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: [],
         clues: [],
         solution: SolutionData(suspectPositions: {}),
       );

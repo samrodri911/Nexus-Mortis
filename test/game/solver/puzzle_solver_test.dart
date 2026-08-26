@@ -34,9 +34,9 @@ void main() {
       expect(result.solutionCount, equals(1));
       final found = result.solutions.first.suspectPositions;
 
-      expect(found['suspect_juan'], equals(const CellPosition(1, 2)));
-      expect(found['suspect_ana'], equals(const CellPosition(2, 2)));
-      expect(found['suspect_carlos'], equals(const CellPosition(3, 2)));
+      for (final suspect in demoCase001.suspects) {
+        expect(found[suspect.id], equals(demoCase001.solution.suspectPositions[suspect.id]));
+      }
     });
 
     test('Debe visitar más de 0 nodos', () {
@@ -60,7 +60,7 @@ void main() {
         SuspectData(id: 'a', name: 'A'),
         SuspectData(id: 'b', name: 'B'),
       ],
-      placedObjects: const [],
+      victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: const [],
       clues: const [],
       solution: const SolutionData(suspectPositions: {}),
     );
@@ -90,7 +90,7 @@ void main() {
       suspects: const [
         SuspectData(id: 'juan', name: 'Juan'),
       ],
-      placedObjects: const [
+      victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: const [
         PlacedObjectData(
           object: ObjectData(id: 'cama', name: 'Cama'),
           position: CellPosition(1, 1),
@@ -138,7 +138,7 @@ void main() {
       suspects: const [
         SuspectData(id: 'x', name: 'X'),
       ],
-      placedObjects: const [],
+      victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: const [],
       clues: const [],
       solution: const SolutionData(suspectPositions: {}),
     );

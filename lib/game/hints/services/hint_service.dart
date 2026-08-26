@@ -32,12 +32,18 @@ class HintService {
   HintResult _generateSoftHint(CaseData caseData, PlayerBoardState state, ValidationService validationService) {
     final activeAssignments = _extractActiveAssignments(state);
     
+    // Extraer posiciones de objetos
+    final objectPositions = <String, CellPosition>{};
+    for (final obj in caseData.placedObjects) {
+      objectPositions[obj.object.id] = obj.position;
+    }
+
     // Buscar una pista que sea 'unknown' (aún no se puede evaluar porque faltan piezas)
-    for (final clue in validationService.clues) {
+    for (final clue in caseData.clues) {
       final result = clueEvaluator.evaluate(
         clue,
         activeAssignments,
-        validationService.objectPositions,
+        objectPositions,
       );
 
       if (result == ClueEvaluationResult.unknown) {
@@ -59,11 +65,16 @@ class HintService {
   HintResult _generateMediumHint(CaseData caseData, PlayerBoardState state, ValidationService validationService) {
     final activeAssignments = _extractActiveAssignments(state);
     
-    for (final clue in validationService.clues) {
+    final objectPositions = <String, CellPosition>{};
+    for (final obj in caseData.placedObjects) {
+      objectPositions[obj.object.id] = obj.position;
+    }
+
+    for (final clue in caseData.clues) {
       final result = clueEvaluator.evaluate(
         clue,
         activeAssignments,
-        validationService.objectPositions,
+        objectPositions,
       );
 
       if (result == ClueEvaluationResult.unsatisfied) {
@@ -84,7 +95,7 @@ class HintService {
   /// Pista Reveal: Revela una relación lógica verdadera basada en la solución,
   /// sin dar coordenadas directas.
   HintResult _generateRevealHint(CaseData caseData, PlayerBoardState state, ValidationService validationService) {
-    final solution = validationService.solution;
+    final solution = caseData.solution;
     
     // Buscar un sospechoso que aún no esté correctamente ubicado por el jugador
     final activeAssignments = _extractActiveAssignments(state);

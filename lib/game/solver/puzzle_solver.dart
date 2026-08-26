@@ -5,20 +5,12 @@ import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 import 'package:nexus_mortis/game/solver/heuristics/variable_ordering.dart';
 import 'package:nexus_mortis/game/solver/models/assignment_state.dart';
 import 'package:nexus_mortis/game/solver/models/solver_result.dart';
 
 /// Motor de resolución CSP (Constraint Satisfaction Problem) para Nexus Mortis.
-///
-/// Implementa Backtracking con:
-/// - MRV (Minimum Remaining Values) via [VariableOrdering].
-/// - Forward Checking: propaga restricciones de colisión tras cada asignación.
-/// - Poda temprana: abandona ramas donde una pista ya está `unsatisfied`.
-/// - Detección de unicidad: detiene la búsqueda al alcanzar [maxSolutions].
-///
-/// Es completamente agnóstico de la UI, BoardController y PlayerBoardState.
-/// Solo opera sobre [CaseData], [SpatialClueData] y [ClueEvaluator].
 class PuzzleSolver {
   PuzzleSolver({
     ClueEvaluator? clueEvaluator,
@@ -30,31 +22,25 @@ class PuzzleSolver {
   final ClueEvaluator _clueEvaluator;
   final VariableOrdering _ordering;
 
-  /// Resuelve el puzzle descrito en [caseData].
-  ///
-  /// [maxSolutions] controla cuántas soluciones buscar antes de detenerse.
-  /// Usar `maxSolutions: 2` permite detectar unicidad sin recorrer el árbol
-  /// completo:
-  /// - 0 soluciones → puzzle imposible.
-  /// - 1 solución  → puzzle válido y único.
-  /// - 2 soluciones → puzzle ambiguo.
   SolverResult solve(CaseData caseData, {int maxSolutions = 2}) {
-    // ── Preparación del entorno ──────────────────────────────────────────────
-
     final suspectIds = caseData.suspects.map((s) => s.id).toList();
     final clues = caseData.clues;
 
-    // Mapa de posiciones fijas de objetos para la evaluación de pistas.
     final objectPositions = <String, CellPosition>{};
     for (final obj in caseData.placedObjects) {
       objectPositions[obj.object.id] = obj.position;
     }
 
-    // Conjunto de celdas ocupadas por objetos físicos (no disponibles).
     final blockedCells = objectPositions.values.toSet();
 
-    // ── Dominio inicial ──────────────────────────────────────────────────────
-    // Generar todas las celdas libres del tablero.
+    // Crear mapa de CellPosition a Zone ID para evaluación rápida.
+    final zoneMap = <CellPosition, String>{};
+    for (final zone in caseData.zones) {
+      for (final cell in zone.cells) {
+        zoneMap[cell] = zone.id;
+      }
+    }
+
     final allFreeCells = <CellPosition>[];
     for (int r = 0; r < caseData.boardRows; r++) {
       for (int c = 0; c < caseData.boardColumns; c++) {
@@ -65,12 +51,10 @@ class PuzzleSolver {
       }
     }
 
-    // Todos los sospechosos parten con el mismo dominio inicial.
     final initialDomains = <String, List<CellPosition>>{
       for (final id in suspectIds) id: List.of(allFreeCells),
     };
 
-    // ── Búsqueda ─────────────────────────────────────────────────────────────
     final solutions = <SolutionData>[];
     var visitedNodes = 0;
 
@@ -84,10 +68,10 @@ class PuzzleSolver {
       visitedNodes: (count) => visitedNodes = count,
       visitedNodesMutable: _MutableInt(0),
       maxSolutions: maxSolutions,
+      zoneMap: zoneMap,
+      victimId: caseData.victimId,
+      killerId: caseData.killerId,
     );
-
-    // Recuperar el conteo real de nodos visitados desde el objeto mutable.
-    // (El closure no puede capturar un int directamente en Dart.)
 
     return SolverResult(
       solutionCount: solutions.length,
@@ -96,9 +80,6 @@ class PuzzleSolver {
     );
   }
 
-  // ── Backtracking recursivo ────────────────────────────────────────────────
-
-  /// Retorna true si se debe detener la búsqueda (se alcanzó [maxSolutions]).
   bool _backtrack({
     required AssignmentState state,
     required List<String> unassigned,
@@ -109,49 +90,56 @@ class PuzzleSolver {
     required void Function(int) visitedNodes,
     required _MutableInt visitedNodesMutable,
     required int maxSolutions,
+    required Map<CellPosition, String> zoneMap,
+    required String victimId,
+    required String killerId,
   }) {
     visitedNodesMutable.value++;
     visitedNodes(visitedNodesMutable.value);
 
-    // ── Caso base: todos los sospechosos han sido asignados ──────────────────
     if (unassigned.isEmpty) {
-      // Verificar que todas las pistas sean satisfechas (validación final).
       if (_allCluesSatisfied(state.assignments, clues, objectPositions)) {
         solutions.add(SolutionData(suspectPositions: Map.of(state.assignments)));
       }
       return solutions.length >= maxSolutions;
     }
 
-    // ── MRV: elegir el sospechoso con el dominio más pequeño ─────────────────
     final suspectId = _ordering.pickNext(unassigned, domains);
     final remainingUnassigned =
         unassigned.where((id) => id != suspectId).toList();
     final domain = domains[suspectId] ?? [];
 
-    // ── Probar cada posición del dominio ──────────────────────────────────────
     for (final position in domain) {
-      // Forward Checking: la posición no puede estar ya ocupada.
-      if (state.occupiedPositions.contains(position)) continue;
+      bool isBlocked = false;
+      for (final occupied in state.occupiedPositions) {
+        if (occupied.row == position.row || occupied.col == position.col) {
+          isBlocked = true;
+          break;
+        }
+      }
+      if (isBlocked) continue;
 
-      // Extender la asignación.
       final newState = state.extend(suspectId, position);
 
-      // ── Poda Temprana: verificar pistas afectadas inmediatamente ──────────
-      if (_hasUnsatisfiedClue(newState.assignments, clues, objectPositions)) {
-        continue; // Esta rama muere aquí.
+      // Verificación de la Regla de Asesino (Zonas)
+      // 1. Víctima y Asesino deben estar en la misma zona.
+      // 2. Nadie más puede estar en la zona de la víctima.
+      if (!_isZoneRuleSatisfied(newState.assignments, zoneMap, victimId, killerId)) {
+        continue; // La asignación viola la regla fundamental, podamos.
       }
 
-      // ── Forward Checking: actualizar dominios de los no asignados ─────────
+      if (_hasUnsatisfiedClue(newState.assignments, clues, objectPositions)) {
+        continue; 
+      }
+
       final prunedDomains = _forwardCheck(
         remainingUnassigned,
         domains,
-        position, // La posición recién asignada debe excluirse.
+        position,
       );
 
-      // Si algún sospechoso queda sin posiciones posibles, poda inmediata.
       if (prunedDomains == null) continue;
 
-      // ── Recursar ──────────────────────────────────────────────────────────
       final shouldStop = _backtrack(
         state: newState,
         unassigned: remainingUnassigned,
@@ -162,6 +150,9 @@ class PuzzleSolver {
         visitedNodes: visitedNodes,
         visitedNodesMutable: visitedNodesMutable,
         maxSolutions: maxSolutions,
+        zoneMap: zoneMap,
+        victimId: victimId,
+        killerId: killerId,
       );
 
       if (shouldStop) return true;
@@ -170,12 +161,56 @@ class PuzzleSolver {
     return false;
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  /// Verifica la validez parcial o total de la regla de zonas para el estado actual.
+  bool _isZoneRuleSatisfied(
+    Map<String, CellPosition> assignments,
+    Map<CellPosition, String> zoneMap,
+    String victimId,
+    String killerId,
+  ) {
+    final victimPos = assignments[victimId];
+    
+    // Si la víctima está asignada, verificamos a los demás respecto a ella.
+    if (victimPos != null) {
+      final victimZone = zoneMap[victimPos];
 
-  /// Retorna true si existe alguna pista explícitamente `unsatisfied`
-  /// dado el estado de asignación actual.
-  ///
-  /// Las pistas `unknown` (sospechosos aún no asignados) se ignoran.
+      for (final entry in assignments.entries) {
+        final id = entry.key;
+        final pos = entry.value;
+        if (id == victimId) continue;
+
+        final zone = zoneMap[pos];
+
+        if (id == killerId) {
+          // El asesino DEBE estar en la misma zona que la víctima.
+          if (zone != victimZone) return false;
+        } else {
+          // Los inocentes NO PUEDEN estar en la zona de la víctima.
+          if (zone == victimZone) return false;
+        }
+      }
+    } else {
+      // Si la víctima NO está asignada, verificamos si el asesino
+      // y algún inocente comparten zona (lo cual haría imposible
+      // colocar a la víctima en la zona del asesino después).
+      final killerPos = assignments[killerId];
+      if (killerPos != null) {
+        final killerZone = zoneMap[killerPos];
+        for (final entry in assignments.entries) {
+          final id = entry.key;
+          final pos = entry.value;
+          if (id == killerId) continue;
+          
+          final zone = zoneMap[pos];
+          // Ningún inocente puede estar en la zona del asesino (que será la de la víctima).
+          if (zone == killerZone) return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   bool _hasUnsatisfiedClue(
     Map<String, CellPosition> assignments,
     List<SpatialClueData> clues,
@@ -188,7 +223,6 @@ class PuzzleSolver {
     return false;
   }
 
-  /// Retorna true si todas las pistas están `satisfied`.
   bool _allCluesSatisfied(
     Map<String, CellPosition> assignments,
     List<SpatialClueData> clues,
@@ -201,11 +235,6 @@ class PuzzleSolver {
     return true;
   }
 
-  /// Forward Checking: elimina [occupiedPosition] de todos los dominios
-  /// de sospechosos aún sin asignar.
-  ///
-  /// Retorna null si algún sospechoso queda con dominio vacío (poda).
-  /// Retorna los nuevos dominios si todos siguen viables.
   Map<String, List<CellPosition>>? _forwardCheck(
     List<String> unassigned,
     Map<String, List<CellPosition>> currentDomains,
@@ -215,10 +244,11 @@ class PuzzleSolver {
 
     for (final id in unassigned) {
       final domain = currentDomains[id] ?? [];
-      final filtered =
-          domain.where((pos) => pos != occupiedPosition).toList();
+      final filtered = domain.where((pos) {
+        return pos.row != occupiedPosition.row && pos.col != occupiedPosition.col;
+      }).toList();
 
-      if (filtered.isEmpty) return null; // Poda: dominio vacío.
+      if (filtered.isEmpty) return null; 
 
       pruned[id] = filtered;
     }
@@ -227,7 +257,6 @@ class PuzzleSolver {
   }
 }
 
-/// Entero mutable para poder capturar el contador de nodos en el closure.
 class _MutableInt {
   _MutableInt(this.value);
   int value;

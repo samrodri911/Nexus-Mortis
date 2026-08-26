@@ -1,39 +1,34 @@
+import 'package:nexus_mortis/game/clues/models/object_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 
-/// Caso demostrativo n√∫mero 3.
-/// Se usa para probar el sistema de progresi√≥n y desbloqueo secuencial.
-final CaseData demoCase003 = CaseData(
-  id: 'demo_case_003',
-  title: 'Enigma final del pasillo',
-  description: 'Las sombras se alargan, y las pistas son pocas.',
-  difficulty: PuzzleDifficulty.medium,
-  boardRows: 3,
-  boardColumns: 3,
-  requiredCaseId: 'demo_case_002', // Dependencia: requiere completar el 2
+final demoCase003 = CaseData(
+  id: 'case_003',
+  title: 'La Biblioteca',
+  description: 'Un misterio entre libros antiguos.',
+  difficulty: PuzzleDifficulty.hard,
+  boardRows: 6,
+  boardColumns: 6,
+  zones: const [
+    ZoneData(id: 'z1', name: 'Z1', cells: [CellPosition(0,0)])
+  ],
   suspects: const [
-    SuspectData(id: 'suspect_david', name: 'David'),
     SuspectData(id: 'suspect_elena', name: 'Elena'),
+    SuspectData(id: 'suspect_roberto', name: 'Roberto'),
+    SuspectData(id: 'suspect_sofia', name: 'SofÌa'),
+    SuspectData(id: 'suspect_diego', name: 'Diego'),
+    SuspectData(id: 'victim', name: 'VÌctima'),
   ],
+  victimId: 'victim',
+  killerId: 'suspect_elena',
   placedObjects: const [],
-  clues: const [
-    SpatialClueData(
-      id: 'clue_elena_above_david',
-      text: 'Elena est√° arriba de David.',
-      relation: SpatialRelation.above,
-      suspectId: 'suspect_elena',
-      targetId: 'suspect_david',
-    ),
-  ],
-  solution: const SolutionData(
-    suspectPositions: {
-      'suspect_elena': CellPosition(0, 1),
-      'suspect_david': CellPosition(1, 1),
-    },
-  ),
+  clues: const [],
+  solution: const SolutionData(suspectPositions: {}),
 );

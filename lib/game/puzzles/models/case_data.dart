@@ -5,6 +5,8 @@ import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
 
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
+
 /// Define la totalidad de un caso o nivel dentro de Nexus Mortis.
 ///
 /// Es el único punto de verdad inmutable (fuente de datos) para construir el
@@ -17,7 +19,10 @@ class CaseData {
     required this.difficulty,
     required this.boardRows,
     required this.boardColumns,
+    required this.zones,
     required this.suspects,
+    required this.victimId,
+    required this.killerId,
     required this.placedObjects,
     required this.clues,
     required this.solution,
@@ -33,8 +38,17 @@ class CaseData {
   final int boardRows;
   final int boardColumns;
 
-  /// Lista de sospechosos involucrados en el caso.
+  /// Zonas lógicas y visuales del tablero.
+  final List<ZoneData> zones;
+
+  /// Lista de entidades investigables en el caso (incluye a la víctima).
   final List<SuspectData> suspects;
+
+  /// ID de la víctima (que debe existir en suspects).
+  final String victimId;
+
+  /// ID del asesino (que debe existir en suspects).
+  final String killerId;
 
   /// Objetos físicos inamovibles presentes en el escenario.
   /// Contienen su información base (ObjectData) y su posición (CellPosition).
