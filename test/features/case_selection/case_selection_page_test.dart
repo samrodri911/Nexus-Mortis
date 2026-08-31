@@ -143,7 +143,7 @@ void main() {
   group('CaseSelectionPage â€” Renderizado de casos', () {
     testWidgets('muestra la lista de casos de campaÃ±a desde CaseRegistry', (tester) async {
       await tester.pumpWidget(_buildPage());
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       // Los casos de CaseRegistry deben aparecer en pantalla
       for (final c in CaseRegistry.cases) {
@@ -153,7 +153,7 @@ void main() {
 
     testWidgets('primer caso de campaÃ±a aparece desbloqueado (sin requiredCaseId)', (tester) async {
       await tester.pumpWidget(_buildPage());
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       final firstCase = CaseRegistry.cases.first;
       // Si el primer caso no tiene requisito, debe estar visible sin candado
@@ -164,7 +164,7 @@ void main() {
 
     testWidgets('muestra el header con monedas iniciales', (tester) async {
       await tester.pumpWidget(_buildPage());
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       // PlayerProgress.empty() tiene 500 monedas
       expect(find.text('500'), findsOneWidget);
@@ -172,7 +172,7 @@ void main() {
 
     testWidgets('NO muestra banner de sesiÃ³n pausada cuando no hay sesiÃ³n activa', (tester) async {
       await tester.pumpWidget(_buildPage());
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Tienes una investigación en curso'), findsNothing);
     });
@@ -195,7 +195,7 @@ void main() {
       );
 
       await tester.pumpWidget(_buildPage(progress: progressWithCase));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       // Deben aparecer 3 estrellas llenas + 0 vacÃ­as para el primer caso
       // y 0+3 para los demÃ¡s casos sin completar
@@ -205,7 +205,7 @@ void main() {
 
     testWidgets('NO muestra modo Investigación Infinita si hay casos de campaÃ±a pendientes', (tester) async {
       await tester.pumpWidget(_buildPage());
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Investigación Infinita'), findsNothing);
     });
@@ -277,7 +277,7 @@ void main() {
           sessionService: sessionService,
         ),
       ));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(find.text('Tienes una investigación en curso'), findsOneWidget);
       expect(find.text('CONTINUAR'), findsOneWidget);

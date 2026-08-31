@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';

@@ -51,7 +51,9 @@ class GameSessionService {
   GameSession? get currentSession => sessionNotifier.value;
 
   bool get hasActiveSession =>
-      currentSession != null && currentSession!.status == GameSessionStatus.playing;
+      currentSession != null &&
+      (currentSession!.status == GameSessionStatus.playing ||
+       currentSession!.status == GameSessionStatus.awaitingKiller);
 
   CaseData? get currentCase => _currentCase;
 
@@ -155,6 +157,51 @@ class GameSessionService {
     return session;
   }
 
+  /// Pasa la sesión al estado de espera de acusación del asesino.
+  void setAwaitingKiller() {
+    final session = currentSession;
+    if (session == null ||
+        (session.status != GameSessionStatus.playing &&
+         session.status != GameSessionStatus.paused)) {
+      return;
+    }
+
+    sessionNotifier.value = session.copyWith(
+      status: GameSessionStatus.awaitingKiller,
+    );
+  }
+
+  /// Procesa la deducción del asesino por parte del jugador.
+  ///
+  /// Retorna el [GameResult] si la acusación fue correcta (completando la partida),
+  /// o null si fue incorrecta (incrementando errores y permitiendo reintentar).
+  Future<GameResult?> submitKillerDeduction(String suspectId) async {
+    final session = currentSession;
+    if (session == null) {
+      throw StateError('No active session for killer deduction.');
+    }
+
+    if (session.status != GameSessionStatus.playing &&
+        session.status != GameSessionStatus.awaitingKiller &&
+        session.status != GameSessionStatus.paused) {
+      throw StateError('Cannot submit killer deduction in state: ${session.status}');
+    }
+
+    final caseData = _currentCase;
+    if (caseData == null) {
+      throw StateError('Current case data is missing.');
+    }
+
+    if (suspectId == caseData.killerId) {
+      // Deducción correcta: completar caso y otorgar recompensas
+      return await completeGame();
+    } else {
+      // Deducción incorrecta: penalizar y permitir reintentar
+      recordMistake();
+      return null;
+    }
+  }
+
   bool _isPausing = false;
 
   /// Pausa la partida activa actual y persiste el estado del tablero.
@@ -167,27 +214,27 @@ class GameSessionService {
       return;
     }
 
-    // Solo se permite pausar si el estado es 'playing'.
-    if (session.status != GameSessionStatus.playing) {
+    // Solo se permite pausar si el estado es 'playing' o 'awaitingKiller'.
+    if (session.status != GameSessionStatus.playing &&
+        session.status != GameSessionStatus.awaitingKiller) {
       return;
     }
 
     _isPausing = true;
     try {
+      if (_lastActiveSegmentStart != null) {
+        _accumulatedDuration += DateTime.now().difference(_lastActiveSegmentStart!);
+        _lastActiveSegmentStart = null;
+      }
 
-    if (_lastActiveSegmentStart != null) {
-      _accumulatedDuration += DateTime.now().difference(_lastActiveSegmentStart!);
-      _lastActiveSegmentStart = null;
-    }
+      if (_activeController != null) {
+        await saveGameService.saveCurrentGame(session.caseId, _activeController!);
+      }
 
-    if (_activeController != null) {
-      await saveGameService.saveCurrentGame(session.caseId, _activeController!);
-    }
-
-    sessionNotifier.value = session.copyWith(
-      status: GameSessionStatus.paused,
-      pausedAt: DateTime.now(),
-    );
+      sessionNotifier.value = session.copyWith(
+        status: GameSessionStatus.paused,
+        pausedAt: DateTime.now(),
+      );
     } finally {
       _isPausing = false;
     }
@@ -216,8 +263,6 @@ class GameSessionService {
   /// registra estadísticas, evalúa logros y limpia el guardado en disco.
   Future<GameResult> completeGame() async {
     if (_isCompleting) {
-      // Si ya está completando, esperamos a que termine verificando el estado de la sesión,
-      // aunque en la arquitectura actual UI previene esta concurrencia.
       throw StateError('Game is already being completed.');
     }
 
@@ -232,81 +277,81 @@ class GameSessionService {
     }
 
     if (session.status != GameSessionStatus.playing &&
-        session.status != GameSessionStatus.paused) {
+        session.status != GameSessionStatus.paused &&
+        session.status != GameSessionStatus.awaitingKiller) {
       throw StateError('Cannot complete game from state: ${session.status}');
     }
 
     _isCompleting = true;
     try {
+      // 1. Calcular duración total activa
+      if (_lastActiveSegmentStart != null) {
+        _accumulatedDuration += DateTime.now().difference(_lastActiveSegmentStart!);
+        _lastActiveSegmentStart = null;
+      }
 
-    // 1. Calcular duración total activa
-    if (_lastActiveSegmentStart != null) {
-      _accumulatedDuration += DateTime.now().difference(_lastActiveSegmentStart!);
-      _lastActiveSegmentStart = null;
-    }
+      final caseData = _currentCase;
+      if (caseData == null) {
+        throw StateError('Current case data is missing.');
+      }
 
-    final caseData = _currentCase;
-    if (caseData == null) {
-      throw StateError('Current case data is missing.');
-    }
+      // 2. Calcular estrellas y monedas de forma centralizada y determinista
+      final stars = starCalculator.calculateStars(
+        solved: true,
+        difficulty: caseData.difficulty,
+        hintsUsed: _hintsUsed,
+        mistakes: _mistakes,
+        duration: _accumulatedDuration,
+      );
 
-    // 2. Calcular estrellas y monedas de forma centralizada y determinista
-    final stars = starCalculator.calculateStars(
-      solved: true,
-      difficulty: caseData.difficulty,
-      hintsUsed: _hintsUsed,
-      mistakes: _mistakes,
-      duration: _accumulatedDuration,
-    );
+      final coinsEarned = starCalculator.calculateCoins(
+        solved: true,
+        difficulty: caseData.difficulty,
+        stars: stars,
+      );
 
-    final coinsEarned = starCalculator.calculateCoins(
-      solved: true,
-      difficulty: caseData.difficulty,
-      stars: stars,
-    );
+      // 3. Construir GameResult inmutable
+      final result = GameResult(
+        caseId: session.caseId,
+        caseOrigin: session.origin,
+        solved: true,
+        stars: stars,
+        coinsEarned: coinsEarned,
+        hintsUsed: _hintsUsed,
+        mistakes: _mistakes,
+        duration: _accumulatedDuration,
+        difficulty: caseData.difficulty,
+      );
 
-    // 3. Construir GameResult inmutable
-    final result = GameResult(
-      caseId: session.caseId,
-      caseOrigin: session.origin,
-      solved: true,
-      stars: stars,
-      coinsEarned: coinsEarned,
-      hintsUsed: _hintsUsed,
-      mistakes: _mistakes,
-      duration: _accumulatedDuration,
-      difficulty: caseData.difficulty,
-    );
+      _lastResult = result;
 
-    _lastResult = result;
+      // 4. Otorgar recompensas en ProgressionService (idempotente)
+      await progressionService.completeCase(
+        session.caseId,
+        RewardData(coins: result.coinsEarned, stars: result.stars),
+      );
 
-    // 4. Otorgar recompensas en ProgressionService (idempotente)
-    await progressionService.completeCase(
-      session.caseId,
-      RewardData(coins: result.coinsEarned, stars: result.stars),
-    );
+      // 5. Registrar estadísticas acumuladas
+      await statisticsService.recordResult(result);
 
-    // 5. Registrar estadísticas acumuladas
-    await statisticsService.recordResult(result);
+      // 6. Evaluar y desbloquear logros
+      final newlyUnlocked = await achievementService.processResult(
+        result: result,
+        statistics: statisticsService.statistics,
+        playerProgress: progressionService.progress,
+      );
+      _lastUnlockedAchievements = newlyUnlocked;
 
-    // 6. Evaluar y desbloquear logros
-    final newlyUnlocked = await achievementService.processResult(
-      result: result,
-      statistics: statisticsService.statistics,
-      playerProgress: progressionService.progress,
-    );
-    _lastUnlockedAchievements = newlyUnlocked;
+      // 7. Limpiar partida guardada activa en disco
+      await saveGameService.clearGame();
 
-    // 7. Limpiar partida guardada activa en disco
-    await saveGameService.clearGame();
+      // 8. Actualizar estado de la sesión a 'solved'
+      sessionNotifier.value = session.copyWith(
+        status: GameSessionStatus.solved,
+        completedAt: DateTime.now(),
+      );
 
-    // 8. Actualizar estado de la sesión a 'solved'
-    sessionNotifier.value = session.copyWith(
-      status: GameSessionStatus.solved,
-      completedAt: DateTime.now(),
-    );
-
-    return result;
+      return result;
     } finally {
       _isCompleting = false;
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:nexus_mortis/data/local/isar_achievement_repository.dart';
 import 'package:nexus_mortis/data/local/isar_active_game_repository.dart';
+import 'package:nexus_mortis/data/local/isar_campaign_case_repository.dart';
 import 'package:nexus_mortis/data/local/isar_database.dart';
 import 'package:nexus_mortis/data/local/isar_progress_repository.dart';
 import 'package:nexus_mortis/data/local/isar_statistics_repository.dart';
@@ -12,9 +13,8 @@ import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_service.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
+import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
 import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
-import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
-import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/save_state/save_game_service.dart';
 import 'package:nexus_mortis/game/session/services/game_session_service.dart';
@@ -31,6 +31,7 @@ void main() async {
   final activeGameRepository = IsarActiveGameRepository(isar);
   final statisticsRepository = IsarStatisticsRepository(isar);
   final achievementRepository = IsarAchievementRepository(isar);
+  final campaignCaseRepository = IsarCampaignCaseRepository(isar);
 
   // Inicializar servicios
   final initialProgress = await progressRepository.loadProgress();
@@ -60,10 +61,16 @@ void main() async {
     hintService: hintService,
   );
 
+  final caseCampaignService = CaseCampaignService(
+    campaignCaseRepository: campaignCaseRepository,
+  );
+
+  // Asegurar que la campaña tenga su lote inicial de casos disponible
+  await caseCampaignService.ensureBatchAvailable(progressionService.progress);
+
   final proceduralCaseService = ProceduralCaseService(
     progressionService: progressionService,
-    staticSource: const StaticCaseSource(),
-    generatedSource: GeneratedCaseSource(),
+    caseCampaignService: caseCampaignService,
   );
 
   final gameSessionService = GameSessionService(

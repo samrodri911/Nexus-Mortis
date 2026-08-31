@@ -36,6 +36,7 @@ class SolutionGenerator {
       final suspectPositions = <String, CellPosition>{};
       final usedRows = <int>{};
       final usedCols = <int>{};
+      final zoneCounts = <String, int>{for (final z in zones) z.id: 0};
 
       // Helper for placing an entity
       bool tryPlace(String id, bool Function(CellPosition) condition) {
@@ -51,11 +52,28 @@ class SolutionGenerator {
           }
         }
         if (available.isEmpty) return false;
-        
-        final pos = available[_random.nextInt(available.length)];
+
+        // Balancear distribución entre las opciones disponibles
+        available.sort((a, b) {
+          final countA = zoneCounts[zoneMap[a]?.id ?? ''] ?? 0;
+          final countB = zoneCounts[zoneMap[b]?.id ?? ''] ?? 0;
+          return countA.compareTo(countB);
+        });
+
+        // Seleccionar de las que tienen menor ocupación
+        final minCount = zoneCounts[zoneMap[available.first]?.id ?? ''] ?? 0;
+        final bestCandidates = available.where(
+          (p) => (zoneCounts[zoneMap[p]?.id ?? ''] ?? 0) <= minCount + 1,
+        ).toList();
+
+        final pos = bestCandidates[_random.nextInt(bestCandidates.length)];
         suspectPositions[id] = pos;
         usedRows.add(pos.row);
         usedCols.add(pos.col);
+        final zId = zoneMap[pos]?.id;
+        if (zId != null) {
+          zoneCounts[zId] = (zoneCounts[zId] ?? 0) + 1;
+        }
         return true;
       }
 

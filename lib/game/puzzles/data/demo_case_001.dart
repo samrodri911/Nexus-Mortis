@@ -1,5 +1,7 @@
+import 'package:nexus_mortis/game/clues/models/clue_type.dart';
 import 'package:nexus_mortis/game/clues/models/object_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
+import 'package:nexus_mortis/game/clues/models/spatial_constraint.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
@@ -12,7 +14,7 @@ import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 /// Caso de demostración 001.
 /// 
 /// "La Habitación del Hotel"
-/// Un caso matemáticamente verificado con una solución única en base a 6 pistas.
+/// Formato canónico Murdoku: 1 Personaje = 1 Tarjeta + Tarjeta Canónica de Víctima.
 final demoCase001 = CaseData(
   id: 'case_001',
   title: 'La Habitación del Hotel',
@@ -57,58 +59,42 @@ final demoCase001 = CaseData(
     ),
     PlacedObjectData(
       object: ObjectData(id: 'obj_mesa', name: 'Mesa'),
-      position: CellPosition(4, 0), // Objeto decorativo
+      position: CellPosition(2, 4),
     ),
   ],
   clues: const [
     SpatialClueData(
-      id: 'clue_1',
-      text: 'Juan estaba junto a la cama.',
-      relation: SpatialRelation.adjacentTo,
+      id: 'clue_juan',
+      text: 'Juan se encontraba en la Zona Izquierda, estaba inmediatamente al este de la Cama.',
       suspectId: 'suspect_juan',
-      targetId: 'obj_cama',
+      constraints: [
+        SpatialConstraint(relation: SpatialRelation.inZone, targetId: 'z1', type: ClueType.zone),
+        SpatialConstraint(relation: SpatialRelation.immediatelyEastOf, targetId: 'obj_cama', type: ClueType.cardinal),
+      ],
     ),
     SpatialClueData(
-      id: 'clue_2',
-      text: 'Juan estaba a la derecha de la cama.',
-      relation: SpatialRelation.rightOf,
-      suspectId: 'suspect_juan',
-      targetId: 'obj_cama',
-    ),
-    SpatialClueData(
-      id: 'clue_3',
-      text: 'Carlos estaba junto a la silla.',
-      relation: SpatialRelation.adjacentTo,
-      suspectId: 'suspect_carlos',
-      targetId: 'obj_silla',
-    ),
-    SpatialClueData(
-      id: 'clue_4',
-      text: 'Carlos estaba debajo de la silla.',
-      relation: SpatialRelation.below,
-      suspectId: 'suspect_carlos',
-      targetId: 'obj_silla',
-    ),
-    SpatialClueData(
-      id: 'clue_5',
-      text: 'Ana estaba junto a la cama.',
-      relation: SpatialRelation.adjacentTo,
+      id: 'clue_ana',
+      text: 'Ana se encontraba en la Zona Izquierda, estaba inmediatamente al norte de la Cama.',
       suspectId: 'suspect_ana',
-      targetId: 'obj_cama',
+      constraints: [
+        SpatialConstraint(relation: SpatialRelation.inZone, targetId: 'z1', type: ClueType.zone),
+        SpatialConstraint(relation: SpatialRelation.immediatelyNorthOf, targetId: 'obj_cama', type: ClueType.cardinal),
+      ],
     ),
     SpatialClueData(
-      id: 'clue_6',
-      text: 'Ana estaba arriba de la cama.',
-      relation: SpatialRelation.above,
-      suspectId: 'suspect_ana',
-      targetId: 'obj_cama',
+      id: 'clue_carlos',
+      text: 'Carlos se encontraba en la Zona Derecha, estaba inmediatamente al sur de la Silla.',
+      suspectId: 'suspect_carlos',
+      constraints: [
+        SpatialConstraint(relation: SpatialRelation.inZone, targetId: 'z2', type: ClueType.zone),
+        SpatialConstraint(relation: SpatialRelation.immediatelySouthOf, targetId: 'obj_silla', type: ClueType.cardinal),
+      ],
     ),
     SpatialClueData(
-      id: 'clue_7',
-      text: 'La víctima estaba junto a la silla.',
-      relation: SpatialRelation.adjacentTo,
+      id: 'clue_victim',
+      text: 'La víctima. Estaba a solas con el asesino.',
       suspectId: 'victim',
-      targetId: 'obj_silla',
+      constraints: [],
     ),
   ],
   solution: const SolutionData(

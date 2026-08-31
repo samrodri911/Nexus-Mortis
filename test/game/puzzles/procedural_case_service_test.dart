@@ -1,77 +1,65 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:nexus_mortis/data/repositories/in_memory_campaign_case_repository.dart';
+import 'package:nexus_mortis/data/repositories/progress_repository.dart';
 import 'package:nexus_mortis/game/progression/models/case_progress.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
-import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
-import 'package:nexus_mortis/game/puzzles/models/case_origin.dart';
-import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
-import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
-import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
-import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
-import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
+import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
+import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
 
-import 'package:mocktail/mocktail.dart';
-
-class MockProgressionService extends Mock implements ProgressionService {}
+class MockProgressRepo extends Mock implements ProgressRepository {}
 
 void main() {
-  group('ProceduralCaseService', () {
-    test('getNextCase devuelve campaña si hay casos disponibles', () async {
-      final mockProgression = MockProgressionService();
-      
-      final dummyCase = CaseData(
-        id: 'dummy_1',
-        title: 'Dummy',
-        description: '',
-        difficulty: PuzzleDifficulty.easy,
-        boardRows: 3,
-        boardColumns: 3,
-        suspects: [],
-        victimId: 'dummy1', killerId: 'dummy2', zones: const [], placedObjects: [],
-        clues: [],
-        solution: SolutionData(suspectPositions: {}),
-      );
+  setUpAll(() {
+    registerFallbackValue(PlayerProgress.empty());
+  });
 
-      when(() => mockProgression.getNextCampaignCase(any()))
-          .thenReturn(dummyCase);
+  group('ProceduralCaseService & Continuous Campaign', () {
+    late MockProgressRepo mockRepo;
 
-      final service = ProceduralCaseService(
-        progressionService: mockProgression,
-        staticSource: const StaticCaseSource(),
-        generatedSource: GeneratedCaseSource(),
-      );
-
-      final nextCase = await service.getNextCase();
-      expect(nextCase.id, 'dummy_1');
-      expect(nextCase.origin, CaseOrigin.campaign);
+    setUp(() {
+      mockRepo = MockProgressRepo();
+      when(() => mockRepo.saveProgress(any())).thenAnswer((_) async {});
     });
 
-    test('getNextCase genera un caso procedural si la campaña terminó', () async {
-      final mockProgression = MockProgressionService();
-      
-      when(() => mockProgression.getNextCampaignCase(any())).thenReturn(null);
-      when(() => mockProgression.progress).thenReturn(
-        PlayerProgress(
-          coins: 0, 
-          totalStars: 0, 
-          completedCases: {
-            // Simulamos 1 caso completado para que caiga en Easy (3x3, muy fácil de generar)
-            'c_0': CaseProgress(caseId: 'c_0', completed: true, starsEarned: 3)
-          }
-        )
-      );
-
+    test('getNextCase devuelve casos de campaña en orden inicial (case_001)', () async {
+      final progressionService = ProgressionService(mockRepo);
+      final campaignRepo = InMemoryCampaignCaseRepository();
+      final campaignService = CaseCampaignService(campaignCaseRepository: campaignRepo);
       final service = ProceduralCaseService(
-        progressionService: mockProgression,
-        staticSource: const StaticCaseSource(),
-        generatedSource: GeneratedCaseSource(),
+        progressionService: progressionService,
+        caseCampaignService: campaignService,
       );
 
       final nextCase = await service.getNextCase();
+      expect(nextCase.id, 'case_001');
+    });
+
+    test('getNextCase genera un lote de 10 casos procedurales (case_004..case_013) al completar los estáticos', () async {
+      final pCompleted = PlayerProgress(
+        coins: 100,
+        totalStars: 9,
+        completedCases: {
+          'case_001': const CaseProgress(caseId: 'case_001', completed: true, starsEarned: 3),
+          'case_002': const CaseProgress(caseId: 'case_002', completed: true, starsEarned: 3),
+          'case_003': const CaseProgress(caseId: 'case_003', completed: true, starsEarned: 3),
+        },
+      );
+
+      final progressionService = ProgressionService(mockRepo, initialProgress: pCompleted);
+      final campaignRepo = InMemoryCampaignCaseRepository();
+      final campaignService = CaseCampaignService(campaignCaseRepository: campaignRepo);
+      final service = ProceduralCaseService(
+        progressionService: progressionService,
+        caseCampaignService: campaignService,
+      );
+
+      final nextCase = await service.getNextCase();
+      expect(nextCase.id, 'case_004');
       
-      expect(nextCase.id, startsWith('procedural_'));
-      expect(nextCase.origin, CaseOrigin.procedural);
-      expect(nextCase.boardRows, 3); // Easy policy -> 3x3
+      final availableCases = await service.getAvailableCases();
+      expect(availableCases.length, greaterThanOrEqualTo(13));
     });
   });
 }

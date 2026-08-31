@@ -1,17 +1,17 @@
-/// Representa el estado global del progreso del jugador respecto al puzzle.
+/// Estados de validación del tablero y del caso.
 enum ValidationStatus {
-  /// El caso ha sido resuelto al 100%. Todas las pistas se cumplen y las
-  /// posiciones coinciden con la solución oculta.
-  solved,
+  /// El tablero aún tiene celdas sin asignar ni descartar con X.
+  incomplete,
 
-  /// Todos los sospechosos han sido ubicados, pero hay pistas no satisfechas
-  /// o la posición no coincide con la solución.
-  invalid,
-
-  /// El jugador aún está experimentando. Faltan sospechosos por ubicar,
-  /// pero ya hay pistas que pueden evaluarse (satisfactorias o insatisfactorias).
+  /// El tablero tiene progreso parcial pero aún no está completo.
   partial,
 
-  /// Prácticamente no existe información suficiente para evaluar pistas.
-  incomplete,
+  /// El tablero completo contiene contradicciones lógicas con las pistas o posiciones incorrectas.
+  invalid,
+
+  /// El tablero está 100% resuelto y verificado; listo para la fase de acusación del asesino.
+  readyForKiller,
+
+  /// El caso fue completado con éxito (tablero resuelto + asesino correcto).
+  solved,
 }

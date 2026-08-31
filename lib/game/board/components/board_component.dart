@@ -1,17 +1,9 @@
-import 'package:nexus_mortis/game/board/components/zone_border_component.dart';
 import 'package:flame/components.dart';
 import 'package:nexus_mortis/game/board/components/cell_component.dart';
+import 'package:nexus_mortis/game/board/components/zone_border_component.dart';
 import 'package:nexus_mortis/game/board/controllers/board_controller.dart';
 
 /// Componente raíz del tablero espacial.
-///
-/// Responsabilidades:
-/// - Construir la grilla de [CellComponent] a partir de [BoardController].
-/// - Recibir notificaciones de tap de cada celda.
-/// - Delegar la lógica de toggle al [BoardController].
-///
-/// Es el único componente que conoce tanto la posición de las celdas
-/// como el controlador de estado. Las celdas no toman decisiones.
 class BoardComponent extends Component {
   BoardComponent({
     required this.controller,
@@ -19,10 +11,6 @@ class BoardComponent extends Component {
   });
 
   final BoardController controller;
-
-  /// Tamaño disponible del canvas para calcular el tamaño de cada celda.
-  /// Se recibe desde [NexusGame.onLoad] para evitar importar NexusGame
-  /// y crear una dependencia circular.
   final Vector2 boardSize;
 
   @override
@@ -36,8 +24,6 @@ class BoardComponent extends Component {
       for (var c = 0; c < cols; c++) {
         final cellData = controller.cells[r][c];
 
-        // Resuelve el nombre del objeto desde el mapa del controlador.
-        // CellComponent solo recibe el label ya resuelto.
         final objectLabel = cellData.objectId != null
             ? controller.getObjectLabel(cellData.objectId!)
             : null;
@@ -53,14 +39,14 @@ class BoardComponent extends Component {
         ));
       }
     }
+
+    // Agregar bordes de zonas encima de las celdas
+    await add(ZoneBorderComponent(
+      controller: controller,
+      size: boardSize,
+    ));
   }
 
-  /// Recibe la notificación de tap de una [CellComponent]
-  /// y delega la decisión al controlador.
-  ///
-  /// Flame re-renderiza cada frame, por lo que [CellComponent] refleja
-  /// automáticamente el nuevo estado de [candidateIds] sin necesidad
-  /// de un refresh manual.
   void _onCellTapped(int row, int col) {
     controller.toggleMark(row, col);
   }

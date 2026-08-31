@@ -141,7 +141,7 @@ class _HintButton extends StatelessWidget {
         children: [
           Text(label, style: const TextStyle(color: Colors.amber, fontSize: 12)),
           const SizedBox(width: 4),
-          Text('$cost 🪙', style: const TextStyle(fontSize: 12)),
+          Row(children: [Text('$cost ', style: const TextStyle(fontSize: 12)), const Icon(Icons.monetization_on, color: Colors.amber, size: 14)])
         ],
       ),
       onPressed: onTap,

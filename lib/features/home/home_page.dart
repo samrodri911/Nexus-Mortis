@@ -1,3 +1,5 @@
+import 'package:nexus_mortis/game/results/models/game_result.dart';
+import 'package:nexus_mortis/features/home/dialogs/killer_deduction_dialog.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:nexus_mortis/features/case_selection/case_selection_page.dart';
@@ -10,6 +12,7 @@ import 'package:nexus_mortis/features/results/results_page.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/nexus_game.dart';
 import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
+import 'package:nexus_mortis/features/home/zone_legend_widget.dart';
 import 'package:nexus_mortis/game/session/services/game_session_service.dart';
 import 'package:nexus_mortis/game/validation/models/validation_status.dart';
 
@@ -72,10 +75,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Pausa y guarda si la app pasa a segundo plano.
+    // Pausa y guarda si la app pasa a segundo plano real.
     // No navega: ese es rol exclusivo de _exitGame.
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.hidden) {
       widget.sessionService.pauseGame();
     }
   }
@@ -110,56 +113,70 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isNavigatingToResults = false;
 
   Future<void> _submitSolution() async {
-    final state = _game.boardController.exportPlayerState();
-    final status = _game.validationService.validate(state).status;
+    final currentCase = widget.sessionService.currentCase;
+    if (currentCase == null) return;
 
-    if (status == ValidationStatus.incomplete) {
+    final state = _game.boardController.exportPlayerState();
+    final result = _game.validationService.validateBoard(state);
+
+    if (result.status == ValidationStatus.incomplete || result.status == ValidationStatus.partial) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El tablero está incompleto. Debes llenar o descartar todas las celdas.')),
+        const SnackBar(content: Text('El tablero está incompleto. Debes posicionar a todos los sospechosos y a la víctima en el tablero.')),
       );
       return;
-    } else if (status == ValidationStatus.invalid) {
+    } else if (result.status == ValidationStatus.invalid) {
+      widget.sessionService.recordMistake();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Hay contradicciones en tu deducción. Revisa las pistas.')),
       );
       return;
     }
 
-    if (status == ValidationStatus.solved) {
-      if (_isNavigatingToResults) return;
-      _isNavigatingToResults = true;
+    if (result.status == ValidationStatus.readyForKiller) {
+      widget.sessionService.setAwaitingKiller();
 
-      final result = await widget.sessionService.completeGame();
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ResultsPage(
-            result: result,
-            unlockedAchievements: widget.sessionService.lastUnlockedAchievements,
-            onContinue: (resultsContext) {
-              Navigator.of(resultsContext).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => CaseSelectionPage(
-                    progressionService:
-                        widget.sessionService.progressionService,
-                    saveGameService: widget.sessionService.saveGameService,
-                    economyService: widget.economyService,
-                    proceduralCaseService: widget.proceduralCaseService,
-                    sessionService: widget.sessionService,
-                  ),
-                ),
-              );
-            },
-          ),
+      final gameResult = await showDialog<GameResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogCtx) => KillerDeductionDialog(
+          caseData: currentCase,
+          onAccuse: (suspectId) => widget.sessionService.submitKillerDeduction(suspectId),
         ),
       );
+
+      if (gameResult != null && mounted) {
+        if (_isNavigatingToResults) return;
+        _isNavigatingToResults = true;
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ResultsPage(
+              result: gameResult,
+              unlockedAchievements: widget.sessionService.lastUnlockedAchievements,
+              onContinue: (resultsContext) {
+                Navigator.of(resultsContext).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => CaseSelectionPage(
+                      progressionService: widget.sessionService.progressionService,
+                      saveGameService: widget.sessionService.saveGameService,
+                      economyService: widget.economyService,
+                      proceduralCaseService: widget.proceduralCaseService,
+                      sessionService: widget.sessionService,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentCase = widget.sessionService.currentCase!;
+
 
     return PopScope(
       canPop: false,
@@ -187,10 +204,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               SuspectPanel(controller: _game.boardController),
               ToolPanel(controller: _game.boardController),
               ConfirmationPanel(controller: _game.boardController),
+              ZoneLegendWidget(zones: currentCase.zones),
               Expanded(
                 child: GameWidget<NexusGame>(game: _game),
               ),
-              CluePanel(controller: _game.boardController),
+              CluePanel(controller: _game.boardController, caseData: currentCase),
             ],
           ),
         ),

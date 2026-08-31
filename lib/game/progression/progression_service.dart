@@ -24,13 +24,26 @@ class ProgressionService {
   PlayerProgress get progress => progressNotifier.value;
 
   /// Determina si un caso está desbloqueado basándose en las dependencias
-  /// del propio caso y el progreso actual.
-  bool isCaseUnlocked(CaseData caseData) {
+  /// del propio caso, el progreso actual o la secuencia del listado de campaña.
+  bool isCaseUnlocked(CaseData caseData, {List<CaseData>? allCases, int? index}) {
     if (caseData.requiredCaseId == null) {
       return true; // No requiere caso previo.
     }
 
-    return progress.completedCases.containsKey(caseData.requiredCaseId);
+    if (progress.completedCases.containsKey(caseData.requiredCaseId)) {
+      return true;
+    }
+
+    // Regla de progresión secuencial: si el caso anterior en el listado fue completado,
+    // este caso queda automáticamente desbloqueado.
+    if (allCases != null && index != null && index > 0) {
+      final prevCase = allCases[index - 1];
+      if (progress.completedCases.containsKey(prevCase.id)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// Verifica si un caso ya fue completado.

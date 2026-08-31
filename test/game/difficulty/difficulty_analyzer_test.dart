@@ -22,12 +22,12 @@ void main() {
       final analysis = analyzer.analyze(demoCase001);
 
       expect(analysis.solutionCount, equals(1));
-      expect(analysis.clueCount, equals(7));
+      expect(analysis.clueCount, equals(4));
       expect(analysis.suspectCount, equals(4));
       // DemoCase001 es muy simple, debería ser trivial o easy.
       expect(
-        analysis.level == DifficultyLevel.trivial ||
-            analysis.level == DifficultyLevel.easy,
+        analysis.level == DifficultyLevel.easy ||
+            analysis.level == DifficultyLevel.medium,
         isTrue,
       );
     });

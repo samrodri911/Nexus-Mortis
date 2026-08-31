@@ -2,6 +2,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:nexus_mortis/data/local/models/achievements_entity.dart';
 import 'package:nexus_mortis/data/local/models/active_game_entity.dart';
+import 'package:nexus_mortis/data/local/models/campaign_case_entity.dart';
 import 'package:nexus_mortis/data/local/models/player_progress_entity.dart';
 import 'package:nexus_mortis/data/local/models/statistics_entity.dart';
 
@@ -18,6 +19,7 @@ class IsarDatabase {
         ActiveGameEntitySchema,
         StatisticsEntitySchema,
         AchievementsEntitySchema,
+        CampaignCaseEntitySchema,
       ],
       directory: dir.path,
     );

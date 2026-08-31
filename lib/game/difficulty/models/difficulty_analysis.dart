@@ -11,10 +11,14 @@ class DifficultyAnalysis {
     required this.solutionCount,
     required this.clueCount,
     required this.suspectCount,
+    this.difficultyScore = 0,
   });
 
   /// Clasificación de dificultad calculada.
   final DifficultyLevel level;
+
+  /// Puntuación continua de dificultad (0 a 100).
+  final int difficultyScore;
 
   /// Número de nodos explorados por el solver (proxy de complejidad).
   final int visitedNodes;

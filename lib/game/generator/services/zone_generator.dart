@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 

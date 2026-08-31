@@ -9,14 +9,25 @@ class DifficultyCalibrator {
 
   final DifficultyAnalyzer _analyzer;
 
-  /// Analiza la dificultad. Si [targetDifficulty] no es nulo y la dificultad
-  /// analizada difiere, retorna null (indicando que la calibración falló).
+  /// Analiza la dificultad y verifica tanto el [targetDifficulty] como los rangos numéricos
+  /// de [minScore] y [maxScore]. Retorna null si la calibración no cumple los requisitos.
   DifficultyAnalysis? calibrate(
     CaseData caseData,
-    DifficultyLevel? targetDifficulty,
-  ) {
+    DifficultyLevel? targetDifficulty, {
+    int? minScore,
+    int? maxScore,
+  }) {
     final analysis = _analyzer.analyze(caseData);
-    if (targetDifficulty != null) {
+
+    if (minScore != null && analysis.difficultyScore < minScore) {
+      return null;
+    }
+    if (maxScore != null && analysis.difficultyScore > maxScore) {
+      return null;
+    }
+
+    // Si no se especificaron rangos numéricos pero sí targetDifficulty, verificar la etiqueta
+    if (minScore == null && maxScore == null && targetDifficulty != null) {
       bool isAcceptable = analysis.level == targetDifficulty;
       
       // Permitir flexibilidades mapeadas a la misma PuzzleDifficulty visual

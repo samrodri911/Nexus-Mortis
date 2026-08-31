@@ -8,11 +8,19 @@ class GeneratorConfig {
     required this.suspectCount,
     required this.objectCount,
     this.targetDifficulty,
+    this.minDifficultyScore,
+    this.maxDifficultyScore,
     this.randomSeed,
     this.maxAttempts = 50,
     this.minClues,
     this.maxClues,
   });
+
+  /// Puntuación mínima de dificultad continua permitida (10..100).
+  final int? minDifficultyScore;
+
+  /// Puntuación máxima de dificultad continua permitida (10..100).
+  final int? maxDifficultyScore;
 
   /// Número de filas del tablero.
   final int rows;

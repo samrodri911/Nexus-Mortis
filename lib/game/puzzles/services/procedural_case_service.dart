@@ -1,52 +1,58 @@
 import 'dart:async';
 
+import 'package:nexus_mortis/data/repositories/in_memory_campaign_case_repository.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/generated_case_metadata.dart';
+import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
 import 'package:nexus_mortis/game/puzzles/services/case_identity_factory.dart';
 import 'package:nexus_mortis/game/puzzles/services/procedural_difficulty_policy.dart';
 import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
 import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 
-/// Punto de entrada unificado para que el juego obtenga casos.
-/// Orquesta la transición de casos estáticos a generados sin que la UI lo note.
+/// Punto de entrada y orquestador unificado de casos de campaña y procedimentales.
 class ProceduralCaseService {
   ProceduralCaseService({
     required this.progressionService,
-    required this.staticSource,
-    required this.generatedSource,
+    CaseCampaignService? caseCampaignService,
+    StaticCaseSource? staticSource,
+    GeneratedCaseSource? generatedSource,
     this.difficultyPolicy = const ProceduralDifficultyPolicy(),
     this.identityFactory = const CaseIdentityFactory(),
-  });
+  }) : caseCampaignService = caseCampaignService ??
+            CaseCampaignService(
+              campaignCaseRepository: InMemoryCampaignCaseRepository(),
+              staticSource: staticSource ?? const StaticCaseSource(),
+              identityFactory: identityFactory,
+            );
 
   final ProgressionService progressionService;
-  final StaticCaseSource staticSource;
-  final GeneratedCaseSource generatedSource;
+  final CaseCampaignService caseCampaignService;
   final ProceduralDifficultyPolicy difficultyPolicy;
   final CaseIdentityFactory identityFactory;
 
-  /// Retorna el siguiente caso a jugar.
-  FutureOr<CaseData> getNextCase() async {
-    // 1. ¿Quedan casos de campaña?
-    final nextCampaign = progressionService.getNextCampaignCase(staticSource.allCases);
-    if (nextCampaign != null) {
-      return nextCampaign;
-    }
-
-    // 2. Si no, generar uno procedimental.
-    final config = difficultyPolicy.determineNextConfig(progressionService.progress);
-    return generatedSource.generateNew(config, identityFactory);
+  /// Retorna todos los casos disponibles en la campaña continua.
+  Future<List<CaseData>> getAvailableCases() async {
+    await caseCampaignService.ensureBatchAvailable(progressionService.progress);
+    return await caseCampaignService.getAvailableCases();
   }
 
-  /// Recupera un caso por su ID. Principalmente para Save & Resume.
-  FutureOr<CaseData?> getCaseById(String id, {GeneratedCaseMetadata? metadata}) async {
-    // Si tenemos metadata procedural explícita, delegamos a GeneratedCaseSource 
-    // para su reconstrucción al vuelo (determinista).
-    if (metadata != null) {
-      return generatedSource.reconstructCase(id, metadata);
+  /// Retorna el siguiente caso a jugar en la campaña continua.
+  Future<CaseData> getNextCase() async {
+    final next = await caseCampaignService.getNextCase(progressionService.progress);
+    if (next != null) {
+      return next;
     }
-    
-    // De otra manera intentamos recuperarlo de fuentes estáticas.
-    return (await staticSource.getCase(id)) ?? (await generatedSource.getCase(id));
+
+    final cases = await caseCampaignService.getAvailableCases();
+    return cases.firstWhere(
+      (c) => !progressionService.isCaseCompleted(c.id),
+      orElse: () => cases.first,
+    );
+  }
+
+  /// Recupera un caso por su ID para Save, Resume o selección directa.
+  Future<CaseData?> getCaseById(String id, {GeneratedCaseMetadata? metadata}) async {
+    return await caseCampaignService.getCase(id);
   }
 }

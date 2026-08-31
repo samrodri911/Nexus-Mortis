@@ -90,6 +90,7 @@ class GeneratedCaseSource implements CaseSource {
       killerId: data.killerId,
       placedObjects: data.placedObjects,
       clues: data.clues,
+      globalRules: data.globalRules,
       solution: data.solution,
       requiredCaseId: data.requiredCaseId,
       origin: origin,
