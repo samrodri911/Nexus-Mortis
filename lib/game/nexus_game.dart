@@ -105,12 +105,23 @@ class NexusGame extends FlameGame {
     print('--------------------');
   }
 
+  late final BoardComponent _boardComponent;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    await add(BoardComponent(
+    _boardComponent = BoardComponent(
       controller: boardController,
       boardSize: size,
-    ));
+    );
+    await add(_boardComponent);
+  }
+
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    if (isLoaded) {
+      _boardComponent.resize(size);
+    }
   }
 }

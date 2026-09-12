@@ -84,11 +84,14 @@ class SolutionGenerator {
       // 2. Place Killer (MUST be in victimZone)
       if (!tryPlace(killerId, (p) => zoneMap[p] == victimZone)) continue;
 
-      // 3. Place other innocents (MUST NOT be in victimZone)
+      // 3. Place other innocents (MUST NOT be in victimZone AND their zone must have 0 suspects so far)
       bool allPlaced = true;
       for (final s in suspects) {
         if (s.id == victimId || s.id == killerId) continue;
-        if (!tryPlace(s.id, (p) => zoneMap[p] != victimZone)) {
+        if (!tryPlace(s.id, (p) {
+          final zId = zoneMap[p]?.id;
+          return zId != victimZone?.id && (zoneCounts[zId] ?? 0) == 0;
+        })) {
           allPlaced = false;
           break;
         }

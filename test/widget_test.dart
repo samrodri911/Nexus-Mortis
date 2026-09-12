@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_mortis/data/repositories/achievement_repository.dart';
 import 'package:nexus_mortis/data/repositories/active_game_repository.dart';
+import 'package:nexus_mortis/data/repositories/in_memory_campaign_case_repository.dart';
 import 'package:nexus_mortis/data/repositories/progress_repository.dart';
 import 'package:nexus_mortis/data/repositories/statistics_repository.dart';
 import 'package:nexus_mortis/features/case_selection/case_selection_page.dart';
@@ -12,9 +13,8 @@ import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_service.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
+import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
 import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
-import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
-import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/save_state/save_game_service.dart';
 import 'package:nexus_mortis/game/session/services/game_session_service.dart';
@@ -86,10 +86,13 @@ void main() {
     final hintService = HintService(clueEvaluator: const ClueEvaluator(SpatialClueEvaluator()));
     final economyService = HintEconomyService(progressionService: progressionService, hintService: hintService);
 
+    final campaignRepo = InMemoryCampaignCaseRepository();
+    final campaignService = CaseCampaignService(campaignCaseRepository: campaignRepo);
+    await campaignService.ensureBatchAvailable(progressionService.progress);
+
     final proceduralCaseService = ProceduralCaseService(
       progressionService: progressionService,
-      staticSource: const StaticCaseSource(),
-      generatedSource: GeneratedCaseSource(),
+      caseCampaignService: campaignService,
     );
 
     final gameSessionService = GameSessionService(

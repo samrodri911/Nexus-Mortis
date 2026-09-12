@@ -6,6 +6,21 @@ import 'package:nexus_mortis/game/puzzles/models/board_rule_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 
+/// Origen o tipo de operador lógico que produjo la deducción.
+enum DeductionSourceType {
+  /// Pista individual de una tarjeta de sospechoso.
+  suspectClue,
+
+  /// Regla global o meta-condición del escenario (BoardRuleData).
+  globalRule,
+
+  /// Invariante Murdoku (exclusión de celda, fila o columna fijada).
+  murdoku,
+
+  /// Regla de escena del crimen (relación víctima-asesino y recuento de ocupantes).
+  crimeScene,
+}
+
 /// Representa un paso formal de deducción en la simulación humana.
 class DeductionStep {
   const DeductionStep({
@@ -14,6 +29,9 @@ class DeductionStep {
     required this.candidateCountBefore,
     required this.candidateCountAfter,
     required this.reason,
+    this.sourceType = DeductionSourceType.suspectClue,
+    this.ruleId,
+    this.explanation,
   });
 
   final int stepNumber;
@@ -21,15 +39,25 @@ class DeductionStep {
   final int candidateCountBefore;
   final int candidateCountAfter;
   final String reason;
+  final DeductionSourceType sourceType;
+  final String? ruleId;
+  final String? explanation;
+
+  /// Cantidad absoluta de candidatos eliminados en este paso.
+  int get reductionAmount => candidateCountBefore - candidateCountAfter;
+
+  /// Proporción relativa de reducción conseguida en este paso (0.0 .. 1.0).
+  double get reductionRatio =>
+      candidateCountBefore > 0 ? (candidateCountBefore - candidateCountAfter) / candidateCountBefore : 0.0;
 
   @override
   String toString() =>
-      'Paso $stepNumber: $entityId ($candidateCountBefore -> $candidateCountAfter) [$reason]';
+      'Paso $stepNumber [$sourceType${ruleId != null ? ':$ruleId' : ''}]: $entityId ($candidateCountBefore -> $candidateCountAfter, -$reductionAmount) [$reason]';
 }
 
 /// Resultado exhaustivo de la simulación deductiva humana.
-class PuzzleSimulationResult {
-  const PuzzleSimulationResult({
+class HumanDeductionReplayResult {
+  const HumanDeductionReplayResult({
     required this.solved,
     required this.domainSizes,
     required this.steps,
@@ -87,13 +115,13 @@ class PuzzleSimulationResult {
 
 /// Simula rigurosamente el razonamiento deductivo humano para resolver el puzzle
 /// basándose exclusivamente en restricciones visibles (Murdoku, Zonas, Pistas y Reglas de Tablero),
-/// SIN utilizar conocimiento oculto (como el killerId o la posición de la solución).
-class PuzzleSimulator {
-  const PuzzleSimulator([this._evaluator = const SpatialClueEvaluator()]);
+/// SIN utilizar conocimiento oculto (como el killerId o la solución).
+class HumanDeductionReplay {
+  const HumanDeductionReplay([this._evaluator = const SpatialClueEvaluator()]);
 
   final SpatialClueEvaluator _evaluator;
 
-  PuzzleSimulationResult simulate(CaseData data, List<SpatialClueData> cluesToUse) {
+  HumanDeductionReplayResult simulate(CaseData data, List<SpatialClueData> cluesToUse) {
     final domains = <String, Set<CellPosition>>{};
     final allCells = <CellPosition>[];
     final trace = <DeductionStep>[];
@@ -134,7 +162,7 @@ class PuzzleSimulator {
       loopCycles++;
 
       if (domains.values.any((d) => d.isEmpty)) {
-        return PuzzleSimulationResult(
+        return HumanDeductionReplayResult(
           solved: false,
           domainSizes: {for (final e in domains.entries) e.key: e.value.length},
           steps: loopCycles,
@@ -166,6 +194,8 @@ class PuzzleSimulator {
               candidateCountBefore: before,
               candidateCountAfter: domain.length,
               reason: 'Exclusión Murdoku por posición fijada de ${locked.key} en (${lockedPos.row}, ${lockedPos.col})',
+              sourceType: DeductionSourceType.murdoku,
+              explanation: 'Invariante Murdoku: fila y columna exclusivas',
             ));
           }
         }
@@ -193,6 +223,8 @@ class PuzzleSimulator {
                 candidateCountBefore: before,
                 candidateCountAfter: otherDomain.length,
                 reason: 'Exclusión de fila $fixedRow porque ${entry.key} está forzada en esa fila',
+                sourceType: DeductionSourceType.murdoku,
+                explanation: 'Alineación forzada en fila $fixedRow',
               ));
             }
           }
@@ -214,6 +246,8 @@ class PuzzleSimulator {
                 candidateCountBefore: before,
                 candidateCountAfter: otherDomain.length,
                 reason: 'Exclusión de columna $fixedCol porque ${entry.key} está forzada en esa columna',
+                sourceType: DeductionSourceType.murdoku,
+                explanation: 'Alineación forzada en columna $fixedCol',
               ));
             }
           }
@@ -255,6 +289,9 @@ class PuzzleSimulator {
             candidateCountBefore: beforeSubj,
             candidateCountAfter: subjDomain.length,
             reason: 'Tarjeta de Pista: ${clue.text.isNotEmpty ? clue.text : clue.id}',
+            sourceType: DeductionSourceType.suspectClue,
+            ruleId: clue.id,
+            explanation: 'Satisfacción conjunta de restricciones de tarjeta',
           ));
         }
 
@@ -290,6 +327,9 @@ class PuzzleSimulator {
                 candidateCountBefore: beforeTarget,
                 candidateCountAfter: targetDomain.length,
                 reason: 'Propagación simétrica con ${clue.suspectId}',
+                sourceType: DeductionSourceType.suspectClue,
+                ruleId: clue.id,
+                explanation: 'Consistencia de arco con ${clue.suspectId}',
               ));
             }
           }
@@ -325,6 +365,8 @@ class PuzzleSimulator {
                 candidateCountBefore: before,
                 candidateCountAfter: victimDomain.length,
                 reason: 'Regla de Asesinato: Zona ${entry.key} tiene ${entry.value} sospechosos fijados (máximo 1)',
+                sourceType: DeductionSourceType.crimeScene,
+                explanation: 'Zona saturada con inocentes',
               ));
             }
           }
@@ -350,6 +392,8 @@ class PuzzleSimulator {
             candidateCountBefore: beforeVictim,
             candidateCountAfter: victimDomain.length,
             reason: 'Regla de Asesinato: La víctima debe estar en una zona con al menos un sospechoso (el asesino)',
+            sourceType: DeductionSourceType.crimeScene,
+            explanation: 'Ausencia de sospechosos en la habitación',
           ));
         }
       }
@@ -362,6 +406,10 @@ class PuzzleSimulator {
       for (final rule in data.globalRules) {
         switch (rule.type) {
           case BoardRuleType.maxOnePersonPerRoomExceptCrime:
+            final victimCandidateZones = victimDomain != null
+                ? victimDomain.map((p) => zoneMap[p]).where((z) => z != null).toSet()
+                : <String>{};
+
             final lockedSuspectsByZone = <String, List<String>>{};
             for (final entry in domains.entries) {
               if (entry.key == data.victimId) continue;
@@ -372,23 +420,33 @@ class PuzzleSimulator {
                 }
               }
             }
+
             for (final entry in lockedSuspectsByZone.entries) {
               final zId = entry.key;
               final fixedSuspect = entry.value.first;
-              for (final other in domains.keys) {
-                if (other == data.victimId || other == fixedSuspect) continue;
-                final otherDomain = domains[other]!;
-                final beforeOther = otherDomain.length;
-                otherDomain.removeWhere((p) => zoneMap[p] == zId);
-                if (otherDomain.length < beforeOther) {
-                  changed = true;
-                  trace.add(DeductionStep(
-                    stepNumber: stepCounter++,
-                    entityId: other,
-                    candidateCountBefore: beforeOther,
-                    candidateCountAfter: otherDomain.length,
-                    reason: 'Regla Global Ocupación: ${rule.text}',
-                  ));
+
+              // Si la zona NO puede ser la escena del crimen (la víctima ya no puede estar aquí),
+              // ningún otro sospechoso puede estar en esta zona (máximo 1 persona por estancia).
+              final cannotBeCrime = !victimCandidateZones.contains(zId);
+              if (cannotBeCrime) {
+                for (final other in domains.keys) {
+                  if (other == data.victimId || other == fixedSuspect) continue;
+                  final otherDomain = domains[other]!;
+                  final beforeOther = otherDomain.length;
+                  otherDomain.removeWhere((p) => zoneMap[p] == zId);
+                  if (otherDomain.length < beforeOther) {
+                    changed = true;
+                    trace.add(DeductionStep(
+                      stepNumber: stepCounter++,
+                      entityId: other,
+                      candidateCountBefore: beforeOther,
+                      candidateCountAfter: otherDomain.length,
+                      reason: 'Regla Global Ocupación: ${rule.text}',
+                      sourceType: DeductionSourceType.globalRule,
+                      ruleId: rule.id,
+                      explanation: 'Zona $zId no es escena del crimen y ya está ocupada por $fixedSuspect',
+                    ));
+                  }
                 }
               }
             }
@@ -416,24 +474,62 @@ class PuzzleSimulator {
                   candidateCountBefore: before,
                   candidateCountAfter: victimDomain.length,
                   reason: 'Regla Global: ${rule.text}',
+                  sourceType: DeductionSourceType.globalRule,
+                  ruleId: rule.id,
+                  explanation: 'La estancia no puede quedar vacía',
                 ));
               }
             }
             break;
 
           case BoardRuleType.singleOccupantZone:
-            if (rule.targetId != null && victimDomain != null && victimDomain.isNotEmpty) {
-              final before = victimDomain.length;
-              victimDomain.removeWhere((p) => zoneMap[p] == rule.targetId);
-              if (victimDomain.length < before) {
-                changed = true;
-                trace.add(DeductionStep(
-                  stepNumber: stepCounter++,
-                  entityId: data.victimId,
-                  candidateCountBefore: before,
-                  candidateCountAfter: victimDomain.length,
-                  reason: 'Regla Global (Zona de Ocupante Único): ${rule.text}',
-                ));
+            final targetZone = rule.targetId;
+            if (targetZone != null) {
+              // 1. La víctima NO puede estar en una habitación de ocupante único (la escena del crimen tiene 2 ocupantes)
+              if (victimDomain != null && victimDomain.isNotEmpty) {
+                final beforeVictim = victimDomain.length;
+                victimDomain.removeWhere((p) => zoneMap[p] == targetZone);
+                if (victimDomain.length < beforeVictim) {
+                  changed = true;
+                  trace.add(DeductionStep(
+                    stepNumber: stepCounter++,
+                    entityId: data.victimId,
+                    candidateCountBefore: beforeVictim,
+                    candidateCountAfter: victimDomain.length,
+                    reason: 'Regla Global (Zona de Ocupante Único): ${rule.text}',
+                    sourceType: DeductionSourceType.globalRule,
+                    ruleId: rule.id,
+                    explanation: 'La víctima no puede estar en $targetZone porque la escena del crimen requiere 2 personas',
+                  ));
+                }
+              }
+
+              // 2. Si un sospechoso ya está fijo en esa zona, los demás sospechosos son expulsados de esa zona
+              for (final entry in domains.entries) {
+                if (entry.key == data.victimId) continue;
+                if (entry.value.length == 1 && zoneMap[entry.value.first] == targetZone) {
+                  final lockedSuspect = entry.key;
+                  for (final other in domains.keys) {
+                    if (other == data.victimId || other == lockedSuspect) continue;
+                    final otherDomain = domains[other]!;
+                    final beforeOther = otherDomain.length;
+                    otherDomain.removeWhere((p) => zoneMap[p] == targetZone);
+                    if (otherDomain.length < beforeOther) {
+                      changed = true;
+                      trace.add(DeductionStep(
+                        stepNumber: stepCounter++,
+                        entityId: other,
+                        candidateCountBefore: beforeOther,
+                        candidateCountAfter: otherDomain.length,
+                        reason: 'Regla Global (Ocupante Único en $targetZone): ${rule.text}',
+                        sourceType: DeductionSourceType.globalRule,
+                        ruleId: rule.id,
+                        explanation: '$lockedSuspect ya ocupa $targetZone de forma exclusiva',
+                      ));
+                    }
+                  }
+                  break;
+                }
               }
             }
             break;
@@ -450,6 +546,9 @@ class PuzzleSimulator {
                   candidateCountBefore: before,
                   candidateCountAfter: victimDomain.length,
                   reason: 'Regla Global Escenario: ${rule.text}',
+                  sourceType: DeductionSourceType.globalRule,
+                  ruleId: rule.id,
+                  explanation: 'Exclusión de estancias sin mobiliario para la víctima',
                 ));
               }
             }
@@ -467,6 +566,9 @@ class PuzzleSimulator {
                   candidateCountBefore: before,
                   candidateCountAfter: victimDomain.length,
                   reason: 'Regla Global Escenario: ${rule.text}',
+                  sourceType: DeductionSourceType.globalRule,
+                  ruleId: rule.id,
+                  explanation: 'Exclusión de estancias con mobiliario para la víctima',
                 ));
               }
             }
@@ -520,7 +622,7 @@ class PuzzleSimulator {
     final victimClues = cluesToUse.where((c) => c.suspectId == data.victimId && !c.isVictimCard);
     final victimSolvedByExhaustion = isEveryEntityDetermined && victimClues.isEmpty;
 
-    return PuzzleSimulationResult(
+    return HumanDeductionReplayResult(
       solved: isEveryEntityDetermined && killerUnique,
       domainSizes: domainSizes,
       steps: loopCycles,
@@ -562,12 +664,6 @@ class PuzzleSimulator {
     if (targetDomain.isEmpty) return false;
 
     return targetDomain.any((tPos) {
-      if (!isTargetObject && (sPos.row == tPos.row || sPos.col == tPos.col)) {
-        if (constraint.relation != SpatialRelation.sameRow &&
-            constraint.relation != SpatialRelation.sameColumn) {
-          return false;
-        }
-      }
       return _evaluator.evaluate(
         suspectPosition: sPos,
         targetPosition: tPos,

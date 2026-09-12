@@ -1,9 +1,7 @@
-import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
-import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
 import 'package:nexus_mortis/game/clues/models/clue_type.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/generator/services/clue_text_formatter.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
@@ -16,12 +14,12 @@ import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 class CaseIntegrityValidator {
   CaseIntegrityValidator({
     PuzzleSolver? solver,
-    PuzzleSimulator? simulator,
+    HumanDeductionReplay? simulator,
   })  : _solver = solver ?? PuzzleSolver(),
-        _simulator = simulator ?? const PuzzleSimulator();
+        _simulator = simulator ?? const HumanDeductionReplay();
 
   final PuzzleSolver _solver;
-  final PuzzleSimulator _simulator;
+  final HumanDeductionReplay _simulator;
 
   /// Valida la integridad estructural, lógica y deductiva de un [CaseData].
   bool validate(CaseData caseData) => validateDetailed(caseData).isValid;
@@ -327,19 +325,7 @@ class CaseIntegrityValidator {
       }
     }
 
-    // 8. Validación de Doble Anclaje (Single Anchor)
-    for (final clue in caseData.clues) {
-      if (clue.suspectId == caseData.victimId) continue;
-      final anchorValid = _validateSingleAnchor(clue, caseData, validTargets);
-      if (!anchorValid) {
-        return CaseValidationResult.rejected(
-          CaseRejectionReason.suspectAmbiguous,
-          details: 'La pista del sospechoso "${clue.suspectId}" no reduce su posición a exactamente 1 celda por sí misma (falla el doble anclaje)',
-        );
-      }
-    }
-
-    // 9. Reglas Globales (Máximo 1 y estructuralmente válidas)
+    // Reglas Globales (Máximo 1 y estructuralmente válidas)
     if (caseData.globalRules.length > 1) {
       return CaseValidationResult.rejected(
         CaseRejectionReason.globalRuleTooMany,
@@ -355,7 +341,7 @@ class CaseIntegrityValidator {
       }
     }
 
-    // 9. Determinación Deductiva Humana (CERO Grados de Libertad y CERO Guessing)
+    // 8. Determinación Deductiva Humana (CERO Grados de Libertad y CERO Guessing)
     final simResult = _simulator.simulate(caseData, caseData.clues);
     if (!simResult.solved || simResult.stuck) {
       return CaseValidationResult.rejected(
@@ -369,6 +355,19 @@ class CaseIntegrityValidator {
         details: 'La deducción humana requirió adivinación / branching',
       );
     }
+
+    // Nivel B: HumanReplay == GroundTruth
+    for (final suspect in caseData.suspects) {
+      final replayPos = simResult.finalPositions[suspect.id];
+      final groundTruthPos = caseData.solution.suspectPositions[suspect.id];
+      if (replayPos != groundTruthPos) {
+        return CaseValidationResult.rejected(
+          CaseRejectionReason.suspectAmbiguous,
+          details: 'La solución deducida para ${suspect.id} ($replayPos) no coincide con el Ground Truth ($groundTruthPos)',
+        );
+      }
+    }
+
     if (!simResult.killerDeductionUnique || simResult.deducedKillerId != caseData.killerId) {
       return CaseValidationResult.rejected(
         CaseRejectionReason.killerDeductionFailed,
@@ -388,10 +387,10 @@ class CaseIntegrityValidator {
       );
     }
 
-    // 10. Necesidad de la Regla Global (No redundancia)
+    // 9. Necesidad de la Regla Global (No redundancia)
     if (caseData.globalRules.isNotEmpty) {
       final baseSim = _simulator.simulate(caseData.copyWith(globalRules: const []), caseData.clues);
-      if (baseSim.victimCandidateCells == 1 && baseSim.victimCandidateRooms == 1) {
+      if (baseSim.solved && !baseSim.requiresGuessing && baseSim.domainSizes.values.every((v) => v == 1)) {
         return CaseValidationResult.rejected(
           CaseRejectionReason.globalRuleRedundant,
           details: 'La regla global es redundante porque el caso ya se cerraba determinísticamente a 1 sin ella',
@@ -399,7 +398,7 @@ class CaseIntegrityValidator {
       }
     }
 
-    // 11. Unicidad Matemática mediante PuzzleSolver
+    // 10. Unicidad Matemática mediante PuzzleSolver (Nivel A)
     final solverResult = _solver.solve(caseData, maxSolutions: 2);
     if (solverResult.solutionCount != 1) {
       return CaseValidationResult.rejected(
@@ -408,78 +407,18 @@ class CaseIntegrityValidator {
       );
     }
 
+    // Nivel A: SolverSolution == GroundTruth
+    for (final suspect in caseData.suspects) {
+      final solverPos = solverResult.solutions.first.suspectPositions[suspect.id];
+      final groundTruthPos = caseData.solution.suspectPositions[suspect.id];
+      if (solverPos != groundTruthPos) {
+         return CaseValidationResult.rejected(
+          CaseRejectionReason.suspectAmbiguous,
+          details: 'La solución matemática para ${suspect.id} ($solverPos) no coincide con el Ground Truth ($groundTruthPos)',
+        );
+      }
+    }
+
     return CaseValidationResult.valid();
-  }
-
-  bool _validateSingleAnchor(SpatialClueData clue, CaseData caseData, Set<String> validTargets) {
-    // Collect all cells
-    final allCells = <CellPosition>[];
-    for (int r = 0; r < caseData.boardRows; r++) {
-      for (int c = 0; c < caseData.boardColumns; c++) {
-        allCells.add(CellPosition(r, c));
-      }
-    }
-    
-    // Remove blocked objects
-    final blocked = caseData.placedObjects.map((o) => o.position).toSet();
-    allCells.removeWhere((p) => blocked.contains(p));
-
-    final objectMap = <String, CellPosition>{};
-    for (final po in caseData.placedObjects) {
-      objectMap[po.object.id] = po.position;
-    }
-
-    final zoneMap = <CellPosition, String>{};
-    for (final z in caseData.zones) {
-      for (final c in z.cells) {
-        zoneMap[c] = z.id;
-      }
-    }
-
-    // Evaluate clue
-    final evaluator = const SpatialClueEvaluator();
-    int count = 0;
-    
-    // Evaluate every possible cell
-    for (final cell in allCells) {
-      bool cellValid = true;
-      for (final constraint in clue.activeConstraints) {
-        if (constraint.relation == SpatialRelation.inZone) {
-          if (zoneMap[cell] != constraint.targetId) {
-            cellValid = false;
-            break;
-          }
-        } else if (constraint.relation == SpatialRelation.notInZone) {
-          if (zoneMap[cell] == constraint.targetId) {
-            cellValid = false;
-            break;
-          }
-        } else {
-          // If the target is an object, test it
-          if (objectMap.containsKey(constraint.targetId)) {
-            final tPos = objectMap[constraint.targetId]!;
-            if (!evaluator.evaluate(
-              suspectPosition: cell,
-              targetPosition: tPos,
-              relation: constraint.relation,
-            )) {
-              cellValid = false;
-              break;
-            }
-          } else {
-            // Target is another suspect (like victim). This is too complex for single anchor, 
-            // usually single anchor implies anchoring against static objects/zones.
-            // In demo cases, all clues anchor to objects or zones.
-            // Let's assume valid for now if it relies on a moving target (handled by simulator),
-            // BUT the user wants the demo cases to not rely on others.
-            // So if it relies on another suspect, the single anchor fails if the suspect is not fixed.
-            // Since we test the clue isolated, another suspect has multiple candidates, making it invalid.
-            return false; 
-          }
-        }
-      }
-      if (cellValid) count++;
-    }
-    return count == 1;
   }
 }

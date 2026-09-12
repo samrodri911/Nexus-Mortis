@@ -6,29 +6,21 @@ import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/generated_case_metadata.dart';
 import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
 import 'package:nexus_mortis/game/puzzles/services/case_identity_factory.dart';
-import 'package:nexus_mortis/game/puzzles/services/procedural_difficulty_policy.dart';
-import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
-import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 
-/// Punto de entrada y orquestador unificado de casos de campaña y procedimentales.
+/// Punto de entrada y orquestador unificado de casos de campaña procedurales.
 class ProceduralCaseService {
   ProceduralCaseService({
     required this.progressionService,
     CaseCampaignService? caseCampaignService,
-    StaticCaseSource? staticSource,
-    GeneratedCaseSource? generatedSource,
-    this.difficultyPolicy = const ProceduralDifficultyPolicy(),
     this.identityFactory = const CaseIdentityFactory(),
   }) : caseCampaignService = caseCampaignService ??
             CaseCampaignService(
               campaignCaseRepository: InMemoryCampaignCaseRepository(),
-              staticSource: staticSource ?? const StaticCaseSource(),
               identityFactory: identityFactory,
             );
 
   final ProgressionService progressionService;
   final CaseCampaignService caseCampaignService;
-  final ProceduralDifficultyPolicy difficultyPolicy;
   final CaseIdentityFactory identityFactory;
 
   /// Retorna todos los casos disponibles en la campaña continua.

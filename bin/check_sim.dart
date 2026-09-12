@@ -1,10 +1,10 @@
 import 'package:nexus_mortis/game/puzzles/data/demo_case_001.dart';
 import 'package:nexus_mortis/game/puzzles/data/demo_case_002.dart';
 import 'package:nexus_mortis/game/puzzles/data/demo_case_003.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 
 void main() {
-  const simulator = PuzzleSimulator();
+  const simulator = HumanDeductionReplay();
 
   final cases = [
     demoCase001,
@@ -16,10 +16,7 @@ void main() {
     print('Checking ${c.id}...');
     final result = simulator.simulate(c, c.clues);
     print('  Steps: ${result.steps}');
-    print('  Victim candidates: ${result.victimCandidateCells}');
-    for (final s in c.suspects) {
-      final state = result.clueStates.values.firstWhere((st) => st.clue.suspectId == s.id);
-      print('  ${s.id} candidates: ${state.candidateCells.length}');
-    }
+    print('  Victim candidate cells: ${result.victimCandidateCells}');
+    print('  Solved: ${result.solved}');
   }
 }

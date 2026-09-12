@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:nexus_mortis/game/clues/models/clue_type.dart';
+import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/generator/services/clue_text_formatter.dart';
@@ -42,6 +43,8 @@ class ClueGenerator {
         zoneCellMap[c] = z.id;
       }
     }
+
+    const evaluator = SpatialClueEvaluator();
 
     final entityIds = allEntities.keys.toList();
     final clues = <SpatialClueData>[];
@@ -113,110 +116,55 @@ class ClueGenerator {
         final posA = allEntities[idA]!;
         final posB = allEntities[idB]!;
 
-        // Adyacencia ortogonal (especialmente con objetos)
-        final isAdj = (posA.row - posB.row).abs() + (posA.col - posB.col).abs() == 1;
-        if (isAdj) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.adjacentTo,
-            type: ClueType.adjacency,
-          );
-        } else if (objectPositions.containsKey(idB)) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.notAdjacentTo,
-            type: ClueType.adjacency,
-          );
-        }
+        // Relaciones Espaciales
+        for (final relation in SpatialRelation.values) {
+          if (relation == SpatialRelation.inZone || relation == SpatialRelation.notInZone) {
+            continue;
+          }
 
-        // Relaciones cardinales
-        if (posA.row < posB.row) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.above,
-            type: ClueType.cardinal,
-          );
-          if (posA.row == posB.row - 1 && posA.col == posB.col) {
-            addClue(
-              subjectId: idA,
-              targetId: idB,
-              relation: SpatialRelation.immediatelyNorthOf,
-              type: ClueType.cardinal,
-            );
+          // Adyacencia negativa solo con objetos
+          if (relation == SpatialRelation.notAdjacentTo && !objectPositions.containsKey(idB)) {
+            continue;
           }
-        } else if (posA.row > posB.row) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.below,
-            type: ClueType.cardinal,
-          );
-          if (posA.row == posB.row + 1 && posA.col == posB.col) {
-            addClue(
-              subjectId: idA,
-              targetId: idB,
-              relation: SpatialRelation.immediatelySouthOf,
-              type: ClueType.cardinal,
-            );
-          }
-        }
 
-        if (posA.col < posB.col) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.leftOf,
-            type: ClueType.cardinal,
-          );
-          if (posA.col == posB.col - 1 && posA.row == posB.row) {
+          if (evaluator.evaluate(suspectPosition: posA, targetPosition: posB, relation: relation)) {
             addClue(
               subjectId: idA,
               targetId: idB,
-              relation: SpatialRelation.immediatelyWestOf,
-              type: ClueType.cardinal,
+              relation: relation,
+              type: _getTypeForRelation(relation),
             );
           }
-        } else if (posA.col > posB.col) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.rightOf,
-            type: ClueType.cardinal,
-          );
-          if (posA.col == posB.col + 1 && posA.row == posB.row) {
-            addClue(
-              subjectId: idA,
-              targetId: idB,
-              relation: SpatialRelation.immediatelyEastOf,
-              type: ClueType.cardinal,
-            );
-          }
-        }
-
-        // Co-localización de línea
-        if (posA.row == posB.row) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.sameRow,
-            type: ClueType.coLocation,
-          );
-        }
-        if (posA.col == posB.col) {
-          addClue(
-            subjectId: idA,
-            targetId: idB,
-            relation: SpatialRelation.sameColumn,
-            type: ClueType.coLocation,
-          );
         }
       }
     }
 
     clues.shuffle(_random);
     return clues;
+  }
+
+  ClueType _getTypeForRelation(SpatialRelation r) {
+    switch (r) {
+      case SpatialRelation.adjacentTo:
+      case SpatialRelation.notAdjacentTo:
+        return ClueType.adjacency;
+      case SpatialRelation.sameRow:
+      case SpatialRelation.sameColumn:
+      case SpatialRelation.differentRow:
+      case SpatialRelation.differentColumn:
+        return ClueType.coLocation;
+      case SpatialRelation.above:
+      case SpatialRelation.below:
+      case SpatialRelation.leftOf:
+      case SpatialRelation.rightOf:
+      case SpatialRelation.immediatelyNorthOf:
+      case SpatialRelation.immediatelySouthOf:
+      case SpatialRelation.immediatelyEastOf:
+      case SpatialRelation.immediatelyWestOf:
+        return ClueType.cardinal;
+      case SpatialRelation.inZone:
+      case SpatialRelation.notInZone:
+        return ClueType.zone;
+    }
   }
 }

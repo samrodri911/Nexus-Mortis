@@ -12,16 +12,15 @@ import 'package:nexus_mortis/game/progression/models/case_progress.dart';
 import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
 import 'package:nexus_mortis/game/hints/services/hint_economy_service.dart';
 import 'package:nexus_mortis/game/hints/services/hint_service.dart';
+import 'package:nexus_mortis/data/repositories/in_memory_campaign_case_repository.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
 import 'package:nexus_mortis/game/progression/progression_service.dart';
-import 'package:nexus_mortis/game/puzzles/case_registry.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_origin.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
+import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
 import 'package:nexus_mortis/game/puzzles/services/procedural_case_service.dart';
-import 'package:nexus_mortis/game/puzzles/sources/generated_case_source.dart';
-import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 import 'package:nexus_mortis/game/save_state/models/active_game_state.dart';
 import 'package:nexus_mortis/game/save_state/save_game_service.dart';
 import 'package:nexus_mortis/game/session/models/game_session_status.dart';
@@ -85,10 +84,10 @@ class _FakeAchRepo implements AchievementRepository {
 // â”€â”€â”€ Factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Builds a [CaseSelectionPage] inside a [MaterialApp] wrapping context.
-Widget _buildPage({
+Future<Widget> _buildPage({
   PlayerProgress? progress,
   GameSessionService? sessionServiceOverride,
-}) {
+}) async {
   final progressRepo = _FakeProgressRepo();
   final progressionService = ProgressionService(
     progressRepo,
@@ -112,10 +111,13 @@ Widget _buildPage({
     hintService: hintService,
   );
 
+  final campaignRepo = InMemoryCampaignCaseRepository();
+  final campaignService = CaseCampaignService(campaignCaseRepository: campaignRepo);
+  await campaignService.ensureBatchAvailable(progressionService.progress);
+
   final proceduralCaseService = ProceduralCaseService(
     progressionService: progressionService,
-    staticSource: const StaticCaseSource(),
-    generatedSource: GeneratedCaseSource(),
+    caseCampaignService: campaignService,
   );
 
   final sessionService = sessionServiceOverride ??
@@ -137,100 +139,84 @@ Widget _buildPage({
   );
 }
 
-// â”€â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Tests ──────────────────────────────────────────────────────────────────
 
 void main() {
-  group('CaseSelectionPage â€” Renderizado de casos', () {
-    testWidgets('muestra la lista de casos de campaÃ±a desde CaseRegistry', (tester) async {
-      await tester.pumpWidget(_buildPage());
+  group('CaseSelectionPage — Renderizado de casos', () {
+    testWidgets('muestra la lista de casos de campaña procedurales', (tester) async {
+      final widget = await _buildPage();
+      await tester.pumpWidget(widget);
       await tester.pumpAndSettle();
 
-      // Los casos de CaseRegistry deben aparecer en pantalla
-      for (final c in CaseRegistry.cases) {
-        expect(find.text(c.title), findsOneWidget);
-      }
+      expect(find.text('EXPEDIENTES DE INVESTIGACIÓN'), findsOneWidget);
+      expect(find.textContaining('Expediente #01'), findsOneWidget);
+      expect(find.textContaining('Expediente #02'), findsOneWidget);
     });
 
-    testWidgets('primer caso de campaÃ±a aparece desbloqueado (sin requiredCaseId)', (tester) async {
-      await tester.pumpWidget(_buildPage());
+    testWidgets('primer caso de campaña aparece desbloqueado (sin requiredCaseId)', (tester) async {
+      final widget = await _buildPage();
+      await tester.pumpWidget(widget);
       await tester.pumpAndSettle();
 
-      final firstCase = CaseRegistry.cases.first;
-      // Si el primer caso no tiene requisito, debe estar visible sin candado
-      expect(firstCase.requiredCaseId, isNull,
-          reason: 'El primer caso debe estar siempre disponible');
-      expect(find.text(firstCase.title), findsOneWidget);
+      expect(find.textContaining('Expediente #01'), findsOneWidget);
     });
 
     testWidgets('muestra el header con monedas iniciales', (tester) async {
-      await tester.pumpWidget(_buildPage());
+      final widget = await _buildPage();
+      await tester.pumpWidget(widget);
       await tester.pumpAndSettle();
 
       // PlayerProgress.empty() tiene 500 monedas
       expect(find.text('500'), findsOneWidget);
     });
 
-    testWidgets('NO muestra banner de sesiÃ³n pausada cuando no hay sesiÃ³n activa', (tester) async {
-      await tester.pumpWidget(_buildPage());
+    testWidgets('NO muestra banner de sesión pausada cuando no hay sesión activa', (tester) async {
+      final widget = await _buildPage();
+      await tester.pumpWidget(widget);
       await tester.pumpAndSettle();
 
       expect(find.text('Tienes una investigación en curso'), findsNothing);
     });
   });
 
-  group('CaseSelectionPage â€” Estado de progreso', () {
+  group('CaseSelectionPage — Estado de progreso', () {
     testWidgets('muestra estrellas del caso completado', (tester) async {
-      // Construir progreso con el primer caso completado con 3 estrellas
-      final firstCaseId = CaseRegistry.cases.first.id;
-      final progressWithCase = PlayerProgress(
+      final progressWithCase = const PlayerProgress(
         coins: 600,
         totalStars: 3,
         completedCases: {
-          firstCaseId: CaseProgress(
-            caseId: firstCaseId,
+          'case_001': CaseProgress(
+            caseId: 'case_001',
             completed: true,
             starsEarned: 3,
           ),
         },
       );
 
-      await tester.pumpWidget(_buildPage(progress: progressWithCase));
+      final widget = await _buildPage(progress: progressWithCase);
+      await tester.pumpWidget(widget);
       await tester.pumpAndSettle();
 
-      // Deben aparecer 3 estrellas llenas + 0 vacÃ­as para el primer caso
-      // y 0+3 para los demÃ¡s casos sin completar
-      // Verificamos que hay al menos 3 Ã­conos de estrella llena
       expect(find.byIcon(Icons.star), findsWidgets);
-    });
-
-    testWidgets('NO muestra modo Investigación Infinita si hay casos de campaÃ±a pendientes', (tester) async {
-      await tester.pumpWidget(_buildPage());
-      await tester.pumpAndSettle();
-
-      expect(find.text('Investigación Infinita'), findsNothing);
     });
   });
 
-  group('CaseSelectionPage â€” Banner de sesiÃ³n pausada', () {
-    testWidgets('muestra banner de continuar cuando hay sesiÃ³n pausada en memoria', (tester) async {
-      // Crear un sessionService con una sesiÃ³n pausada en memoria
-      // Para esto necesitamos construir servicios manualmente y simular el estado
-
-      // Usamos un CaseData mÃ­nimo para simular la pausa
-      final pausedCase = CaseData(
-        id: CaseRegistry.cases.first.id,
-        title: CaseRegistry.cases.first.title,
+  group('CaseSelectionPage — Banner de sesión pausada', () {
+    testWidgets('muestra banner de continuar cuando hay sesión pausada en memoria', (tester) async {
+      const pausedCase = CaseData(
+        id: 'case_001',
+        title: 'Expediente #01: Caso de Prueba',
         description: '',
         difficulty: PuzzleDifficulty.easy,
         boardRows: 3,
         boardColumns: 3,
-        suspects: const [],
+        suspects: [],
         victimId: 'dummy1',
         killerId: 'dummy2',
-        zones: const [],
-        placedObjects: const [],
-        clues: const [],
-        solution: const SolutionData(suspectPositions: {}),
+        zones: [],
+        placedObjects: [],
+        clues: [],
+        solution: SolutionData(suspectPositions: {}),
         origin: CaseOrigin.campaign,
       );
 
@@ -247,13 +233,13 @@ void main() {
         achievementService: AchievementService(_FakeAchRepo()),
       );
 
-      // Iniciar sesiÃ³n para que quede en estado playing
+      // Iniciar sesión para que quede en estado playing
       await sessionService.startNewGame(pausedCase);
       // Pausar sin controlador (no guarda en disco, pero cambia el status)
       await sessionService.pauseGame();
 
       expect(sessionService.currentSession?.status, GameSessionStatus.paused,
-          reason: 'La sesiÃ³n debe estar pausada para que aparezca el banner');
+          reason: 'La sesión debe estar pausada para que aparezca el banner');
 
       final hintService = HintService(
         clueEvaluator: const ClueEvaluator(SpatialClueEvaluator()),
@@ -262,10 +248,13 @@ void main() {
         progressionService: progressionService,
         hintService: hintService,
       );
+      final campaignRepo = InMemoryCampaignCaseRepository();
+      final campaignService = CaseCampaignService(campaignCaseRepository: campaignRepo);
+      await campaignService.ensureBatchAvailable(progressionService.progress);
+
       final proceduralCaseService = ProceduralCaseService(
         progressionService: progressionService,
-        staticSource: const StaticCaseSource(),
-        generatedSource: GeneratedCaseSource(),
+        caseCampaignService: campaignService,
       );
 
       await tester.pumpWidget(MaterialApp(

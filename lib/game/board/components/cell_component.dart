@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
+import 'package:nexus_mortis/game/board/components/architectural_furniture_renderer.dart';
 import 'package:nexus_mortis/game/board/models/cell_annotation.dart';
 import 'package:nexus_mortis/game/board/models/cell_data.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
@@ -10,8 +11,10 @@ import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 /// Componente visual de una celda del tablero.
 ///
 /// Responsabilidades:
-/// - Renderizar su celda (fondos, bloqueos, X globales, candidatos).
-/// - Calcular la mini-cuadrícula de iniciales de forma dinámica (sqrt).
+/// - Delegar el dibujo de objetos lógicos a [ArchitecturalFurnitureRenderer].
+/// - Renderizar confirmación como medallón/ficha de evidencia detective con alta jerarquía.
+/// - Renderizar candidatos en carbón nítido con cápsula azul detective para el sospechoso activo.
+/// - Renderizar marcas de eliminación (X manual roja y Auto-X lápiz).
 /// - Notificar al padre cuando el jugador toca la celda.
 class CellComponent extends PositionComponent with TapCallbacks {
   CellComponent({
@@ -30,119 +33,69 @@ class CellComponent extends PositionComponent with TapCallbacks {
   final List<SuspectData> allSuspects;
   final String? objectLabel;
 
-  static const _colorBorder = ui.Color(0xFF2E2E3E);
-  static const _colorBlockedBg = ui.Color(0xFF0F0F14);
-  static const _colorBlockedStripe = ui.Color(0xFF16161D);
-  static const _colorFreeBg = ui.Color(0xFF1A1A28);
+  static const _furnitureRenderer = ArchitecturalFurnitureRenderer();
 
-  static const _colorEliminatedX = ui.Color(0xFF884444);
-  static const _colorAutoX = ui.Color(0xFF3A3A4A);        // Auto-X: gris tenue
-  static const _colorObjectText = ui.Color(0xFF55556A);
+  // Jerarquía visual sobre plano claro arquitectónico
+  // Manual X: rojo carmín nítido
+  static const _colorEliminatedX = ui.Color(0xFFC62828);
+  // Auto X: lápiz de grafito suave
+  static const _colorAutoX = ui.Color(0xFF8C8D94);
 
-  // Confirmación
-  static const _colorConfirmedBg = ui.Color(0xFF1A1A0A);
-  static const _colorConfirmedBorder = ui.Color(0xFFB8860B); // Dorado
-  static const _colorConfirmedText = ui.Color(0xFFFFD700);
+  // Ficha de evidencia confirmada (medallón detective)
+  static const _colorConfirmedMedalBg = ui.Color(0xFF1B1C22);
+  static const _colorConfirmedOuterRim = ui.Color(0xFFC5A059);
+  static const _colorConfirmedInnerRim = ui.Color(0xFFE5C88A);
+  static const _colorConfirmedText = ui.Color(0xFFFAF6EE);
+  static const _colorConfirmedBadgeBg = ui.Color(0xFF1B5E20);
+  static const _colorConfirmedBadgeText = ui.Color(0xFFE8F5E9);
 
-  // Candidatos
-  static const _colorCandidateText = ui.Color(0xFFAAAAAA);
+  // Candidatos sobre plano claro
+  static const _colorCandidateText = ui.Color(0xFF2C2D35); // Carbón nítido
+  static const _colorCandidateActiveBox = ui.Color(0xFF1565C0); // Azul detective
+  static const _colorCandidateActiveBorder = ui.Color(0xFF64B5F6);
   static const _colorCandidateActiveText = ui.Color(0xFFFFFFFF);
-  static const _colorCandidateActiveBox = ui.Color(0xFF444477);
-  static const _colorCandidateActiveBoxBorder = ui.Color(0xFF8888DD);
 
   @override
   void render(ui.Canvas canvas) {
     final w = size.x;
     final h = size.y;
 
-    // 1. Dibujar el fondo
-    _renderBackground(canvas, w, h);
-
-    // 2. Celdas Bloqueadas (Objetos)
-    if (cellData.isBlocked && objectLabel != null) {
-      _renderCenteredText(canvas, objectLabel!, w, h, _colorObjectText, 11);
+    // 1. Celdas Bloqueadas (Objetos lógicos del puzzle)
+    // Se renderizan directamente sobre la textura del suelo de la habitación
+    if (cellData.isBlocked) {
+      _furnitureRenderer.render(
+        canvas: canvas,
+        objectId: cellData.objectId ?? '',
+        objectLabel: objectLabel,
+        cellRect: ui.Rect.fromLTWH(0, 0, w, h),
+        tileSize: min(w, h),
+      );
       return;
     }
 
-    // 3. Celda Confirmada (tiene prioridad visual sobre candidatos y X manuales)
+    // 2. Celda Confirmada (Máxima prioridad visual - Ficha de evidencia)
     if (cellData.confirmedSuspectId != null) {
       _renderConfirmed(canvas, w, h);
       return;
     }
 
-    // 4. Auto-X (visual, no bloquea)
+    // 3. Auto-X (visual sutil, ayuda del sistema)
     if (cellData.isAutoEliminated) {
       _renderAutoX(canvas, w, h);
     }
 
-    // 5. Marca X Manual
+    // 4. Marca X Manual (deducción del jugador)
     if (cellData.annotation == CellAnnotation.eliminated) {
       _renderEliminatedX(canvas, w, h);
     }
 
-    // 6. Candidatos (Mini-cuadrícula)
+    // 5. Candidatos (Mini-cuadrícula de alta legibilidad)
     if (cellData.isFree && cellData.candidateSuspectIds.isNotEmpty) {
       _renderCandidates(canvas, w, h);
     }
   }
 
-  void _renderBackground(ui.Canvas canvas, double w, double h) {
-    // Fondo base (dorado oscuro si está confirmada)
-    final isConfirmed = cellData.confirmedSuspectId != null;
-    canvas.drawRect(
-      ui.Rect.fromLTWH(1, 1, w - 2, h - 2),
-      ui.Paint()
-        ..color = cellData.isBlocked
-            ? _colorBlockedBg
-            : isConfirmed
-                ? _colorConfirmedBg
-                : _colorFreeBg,
-    );
-
-    // Patrón de rayas sutil para celdas bloqueadas
-    if (cellData.isBlocked) {
-      final stripePaint = ui.Paint()
-        ..color = _colorBlockedStripe
-        ..style = ui.PaintingStyle.stroke
-        ..strokeWidth = 2;
-      for (double i = -h; i < w; i += 10) {
-        canvas.drawLine(ui.Offset(i, 0), ui.Offset(i + h, h), stripePaint);
-      }
-    }
-
-    // Borde: dorado si está confirmada, normal en caso contrario
-    canvas.drawRect(
-      ui.Rect.fromLTWH(0, 0, w, h),
-      ui.Paint()
-        ..color = isConfirmed ? _colorConfirmedBorder : _colorBorder
-        ..style = ui.PaintingStyle.stroke
-        ..strokeWidth = isConfirmed ? 2.0 : 1.0,
-    );
-  }
-
-  /// Dibuja la X manual del jugador (rojo).
-  void _renderEliminatedX(ui.Canvas canvas, double w, double h) {
-    final paint = ui.Paint()
-      ..color = _colorEliminatedX
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = 2;
-    const padding = 12.0;
-    canvas.drawLine(const ui.Offset(padding, padding), ui.Offset(w - padding, h - padding), paint);
-    canvas.drawLine(ui.Offset(w - padding, padding), ui.Offset(padding, h - padding), paint);
-  }
-
-  /// Dibuja la Auto-X generada por el sistema (gris tenue).
-  void _renderAutoX(ui.Canvas canvas, double w, double h) {
-    final paint = ui.Paint()
-      ..color = _colorAutoX
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    const padding = 14.0;
-    canvas.drawLine(const ui.Offset(padding, padding), ui.Offset(w - padding, h - padding), paint);
-    canvas.drawLine(ui.Offset(w - padding, padding), ui.Offset(padding, h - padding), paint);
-  }
-
-  /// Dibuja la inicial del sospechoso confirmado con borde dorado y ✓.
+  /// Dibuja la ficha/medallón de evidencia detective con inicial y checkmark.
   void _renderConfirmed(ui.Canvas canvas, double w, double h) {
     final suspectId = cellData.confirmedSuspectId!;
     final suspect = allSuspects.firstWhere(
@@ -150,14 +103,134 @@ class CellComponent extends PositionComponent with TapCallbacks {
       orElse: () => SuspectData(id: suspectId, name: '?'),
     );
     final initial = suspect.name.isNotEmpty ? suspect.name[0].toUpperCase() : '?';
-    _renderCenteredText(canvas, '$initial ✓', w, h, _colorConfirmedText, 13);
+
+    final center = ui.Offset(w / 2, h / 2);
+    final radius = min(w, h) * 0.38;
+
+    // Sombra suave proyectada del medallón
+    canvas.drawCircle(
+      center + const ui.Offset(0, 2.0),
+      radius,
+      ui.Paint()..color = const ui.Color(0x38000000),
+    );
+
+    // Fondo oscuro profundo del medallón
+    canvas.drawCircle(
+      center,
+      radius,
+      ui.Paint()..color = _colorConfirmedMedalBg,
+    );
+
+    // Borde exterior dorado noble
+    canvas.drawCircle(
+      center,
+      radius,
+      ui.Paint()
+        ..color = _colorConfirmedOuterRim
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 2.2,
+    );
+
+    // Anillo interior fino dorado
+    canvas.drawCircle(
+      center,
+      radius - 2.5,
+      ui.Paint()
+        ..color = _colorConfirmedInnerRim
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+
+    // Letra inicial del sospechoso en el centro
+    final fontSize = radius * 1.05;
+    final pb = ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: ui.TextAlign.center, fontSize: fontSize),
+    )
+      ..pushStyle(ui.TextStyle(
+        color: _colorConfirmedText,
+        fontWeight: ui.FontWeight.bold,
+        fontFamily: 'Roboto',
+      ))
+      ..addText(initial);
+
+    final p = pb.build()..layout(ui.ParagraphConstraints(width: radius * 2));
+    canvas.drawParagraph(p, ui.Offset(center.dx - radius, center.dy - (p.height / 2)));
+
+    // Badge pequeño de verificación (checkmark ✓) en la esquina inferior derecha del medallón
+    final badgeRadius = radius * 0.36;
+    final badgeCenter = ui.Offset(
+      center.dx + radius * 0.65,
+      center.dy + radius * 0.65,
+    );
+
+    // Sombra del badge
+    canvas.drawCircle(
+      badgeCenter + const ui.Offset(0, 1.0),
+      badgeRadius,
+      ui.Paint()..color = const ui.Color(0x40000000),
+    );
+    // Fondo esmeralda/verde detective
+    canvas.drawCircle(
+      badgeCenter,
+      badgeRadius,
+      ui.Paint()..color = _colorConfirmedBadgeBg,
+    );
+    // Borde fino del badge
+    canvas.drawCircle(
+      badgeCenter,
+      badgeRadius,
+      ui.Paint()
+        ..color = _colorConfirmedInnerRim
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    // Símbolo ✓
+    final checkPb = ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: ui.TextAlign.center, fontSize: badgeRadius * 1.3),
+    )
+      ..pushStyle(ui.TextStyle(
+        color: _colorConfirmedBadgeText,
+        fontWeight: ui.FontWeight.bold,
+      ))
+      ..addText('✓');
+
+    final checkP = checkPb.build()..layout(ui.ParagraphConstraints(width: badgeRadius * 2));
+    canvas.drawParagraph(
+      checkP,
+      ui.Offset(badgeCenter.dx - badgeRadius, badgeCenter.dy - (checkP.height / 2)),
+    );
+  }
+
+  /// Dibuja la X manual del jugador (rojo carmín nítido).
+  void _renderEliminatedX(ui.Canvas canvas, double w, double h) {
+    final paint = ui.Paint()
+      ..color = _colorEliminatedX
+      ..style = ui.PaintingStyle.stroke
+      ..strokeCap = ui.StrokeCap.round
+      ..strokeWidth = 2.4;
+    final padding = min(w, h) * 0.22;
+    canvas.drawLine(ui.Offset(padding, padding), ui.Offset(w - padding, h - padding), paint);
+    canvas.drawLine(ui.Offset(w - padding, padding), ui.Offset(padding, h - padding), paint);
+  }
+
+  /// Dibuja la Auto-X generada por el sistema (lápiz de grafito).
+  void _renderAutoX(ui.Canvas canvas, double w, double h) {
+    final paint = ui.Paint()
+      ..color = _colorAutoX
+      ..style = ui.PaintingStyle.stroke
+      ..strokeCap = ui.StrokeCap.round
+      ..strokeWidth = 1.4;
+    final padding = min(w, h) * 0.28;
+    canvas.drawLine(ui.Offset(padding, padding), ui.Offset(w - padding, h - padding), paint);
+    canvas.drawLine(ui.Offset(w - padding, padding), ui.Offset(padding, h - padding), paint);
   }
 
   void _renderCandidates(ui.Canvas canvas, double w, double h) {
     final activeId = getActiveSuspectId();
     final count = allSuspects.length;
-    
-    // Cálculo dinámico para la cuadrícula interna (Ajuste 1)
+    if (count == 0) return;
+
     final cols = sqrt(count).ceil();
     final rows = (count / cols).ceil();
 
@@ -166,7 +239,7 @@ class CellComponent extends PositionComponent with TapCallbacks {
 
     for (var i = 0; i < count; i++) {
       final suspect = allSuspects[i];
-      
+
       // Solo dibujar si es un candidato real
       if (!cellData.candidateSuspectIds.contains(suspect.id)) {
         continue;
@@ -181,60 +254,67 @@ class CellComponent extends PositionComponent with TapCallbacks {
       final isActive = suspect.id == activeId;
       final initial = suspect.name.isNotEmpty ? suspect.name[0].toUpperCase() : '?';
 
-      // Ajuste 2: Recuadro distintivo para el sospechoso activo
+      // Si es el sospechoso activo: cápsula azul detective de alta visibilidad
       if (isActive) {
-        final boxSize = min(slotW, slotH) * 0.7;
+        final boxSize = min(slotW, slotH) * 0.78;
         final boxRect = ui.Rect.fromCenter(
-          center: ui.Offset(cx, cy), 
-          width: boxSize, 
-          height: boxSize
+          center: ui.Offset(cx, cy),
+          width: boxSize,
+          height: boxSize,
         );
-        
-        canvas.drawRect(boxRect, ui.Paint()..color = _colorCandidateActiveBox);
-        canvas.drawRect(
-          boxRect, 
+        final rrect = ui.RRect.fromRectAndRadius(boxRect, const ui.Radius.circular(3.5));
+
+        // Sombra de la cápsula activa
+        canvas.drawRRect(
+          ui.RRect.fromRectAndRadius(boxRect.translate(0, 1), const ui.Radius.circular(3.5)),
+          ui.Paint()..color = const ui.Color(0x33000000),
+        );
+
+        // Relleno azul detective
+        canvas.drawRRect(
+          rrect,
+          ui.Paint()..color = _colorCandidateActiveBox,
+        );
+
+        // Borde fino de brillo
+        canvas.drawRRect(
+          rrect,
           ui.Paint()
-            ..color = _colorCandidateActiveBoxBorder
+            ..color = _colorCandidateActiveBorder
             ..style = ui.PaintingStyle.stroke
-            ..strokeWidth = 1
+            ..strokeWidth = 1.0,
         );
       }
 
       // Dibujar la inicial centrada en su slot
       _renderInitial(
-        canvas, 
-        initial, 
-        cx, 
-        cy, 
-        isActive ? _colorCandidateActiveText : _colorCandidateText,
-        isActive ? ui.FontWeight.bold : ui.FontWeight.normal
+        canvas: canvas,
+        text: initial,
+        cx: cx,
+        cy: cy,
+        color: isActive ? _colorCandidateActiveText : _colorCandidateText,
+        weight: isActive ? ui.FontWeight.w700 : ui.FontWeight.w600,
+        fontSize: min(slotW, slotH) * 0.52,
       );
     }
   }
 
-  void _renderCenteredText(ui.Canvas canvas, String text, double w, double h, ui.Color color, double fontSize) {
-    final pb = ui.ParagraphBuilder(
-      ui.ParagraphStyle(textAlign: ui.TextAlign.center, fontSize: fontSize),
-    )
-      ..pushStyle(ui.TextStyle(color: color))
-      ..addText(text);
-
-    final paragraph = pb.build()..layout(ui.ParagraphConstraints(width: w - 8));
-    canvas.drawParagraph(paragraph, ui.Offset(4, (h - paragraph.height) / 2));
-  }
-
-  void _renderInitial(ui.Canvas canvas, String text, double cx, double cy, ui.Color color, ui.FontWeight weight) {
-    // Un tamaño relativo al tamaño de la celda
-    final fontSize = size.x * 0.15; 
-    
+  void _renderInitial({
+    required ui.Canvas canvas,
+    required String text,
+    required double cx,
+    required double cy,
+    required ui.Color color,
+    required ui.FontWeight weight,
+    required double fontSize,
+  }) {
     final pb = ui.ParagraphBuilder(
       ui.ParagraphStyle(textAlign: ui.TextAlign.center, fontSize: fontSize),
     )
       ..pushStyle(ui.TextStyle(
-        color: color, 
+        color: color,
         fontWeight: weight,
-        // Usar una fuente monospace o similar asegura proporciones
-        fontFamily: 'Roboto', 
+        fontFamily: 'Roboto',
       ))
       ..addText(text);
 

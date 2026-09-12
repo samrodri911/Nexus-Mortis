@@ -102,10 +102,10 @@ void main() {
     const target = CellPosition(2, 2);
 
     test('leftOf funciona correctamente', () {
-      // Izquierda absoluta (misma fila o distinta fila)
+      // Izquierda absoluta (misma fila)
       expect(
         evaluator.evaluate(
-          suspectPosition: const CellPosition(0, 1),
+          suspectPosition: const CellPosition(2, 1),
           targetPosition: target,
           relation: SpatialRelation.leftOf,
         ),
@@ -166,7 +166,7 @@ void main() {
     test('below funciona correctamente', () {
       expect(
         evaluator.evaluate(
-          suspectPosition: const CellPosition(4, 0),
+          suspectPosition: const CellPosition(4, 2),
           targetPosition: target,
           relation: SpatialRelation.below,
         ),

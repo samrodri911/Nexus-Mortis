@@ -4,13 +4,13 @@ import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_generator.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_quality_evaluator.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/puzzles/models/board_rule_data.dart';
 
 void main() async {
   final generator = PuzzleGenerator();
   const evaluator = PuzzleQualityEvaluator();
-  const simulator = PuzzleSimulator();
+  const simulator = HumanDeductionReplay();
 
   final log = StringBuffer();
   log.writeln('# INFORME DE GENERACIÓN MASIVA — OPERADOR DE CLAUSURA GLOBAL (300 CASOS)');

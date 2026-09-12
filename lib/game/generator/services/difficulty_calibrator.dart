@@ -3,6 +3,8 @@ import 'package:nexus_mortis/game/difficulty/models/difficulty_analysis.dart';
 import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
+
 /// Calibra y verifica la dificultad de un puzzle generado.
 class DifficultyCalibrator {
   const DifficultyCalibrator(this._analyzer);
@@ -16,8 +18,9 @@ class DifficultyCalibrator {
     DifficultyLevel? targetDifficulty, {
     int? minScore,
     int? maxScore,
+    HumanDeductionReplayResult? simResult,
   }) {
-    final analysis = _analyzer.analyze(caseData);
+    final analysis = _analyzer.analyze(caseData, simResult: simResult);
 
     if (minScore != null && analysis.difficultyScore < minScore) {
       return null;

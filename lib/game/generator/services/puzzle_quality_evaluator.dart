@@ -1,12 +1,12 @@
 import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 
 /// Evaluador multidimensional de calidad y solvabilidad deductiva humana para puzzles de Nexus Mortis.
 class PuzzleQualityEvaluator {
-  const PuzzleQualityEvaluator([this._simulator = const PuzzleSimulator()]);
-  final PuzzleSimulator _simulator;
+  const PuzzleQualityEvaluator([this._simulator = const HumanDeductionReplay()]);
+  final HumanDeductionReplay _simulator;
 
   /// Retorna un puntaje de calidad (0 a 100).
   /// Si el puzzle no puede ser resuelto humanamente con determinación exacta (candidateCount == 1),
@@ -33,8 +33,8 @@ class PuzzleQualityEvaluator {
     // Si hay regla global, verificar que fuera estrictamente necesaria (no redundante)
     if (caseData.globalRules.isNotEmpty) {
       final baseSim = _simulator.simulate(caseData.copyWith(globalRules: const []), clues);
-      if (baseSim.victimCandidateCells == 1 && baseSim.victimCandidateRooms == 1) {
-        return 0; // Regla redundante e innecesaria (Rechazo absoluto)
+      if (baseSim.solved && !baseSim.requiresGuessing && baseSim.domainSizes.values.every((v) => v == 1)) {
+        return 0; // Regla redundante e innecesaria (el caso ya estaba resuelto sin ella)
       }
     }
 

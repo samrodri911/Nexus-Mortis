@@ -2,13 +2,13 @@ import 'package:nexus_mortis/game/puzzles/data/demo_case_001.dart';
 import 'package:nexus_mortis/game/puzzles/data/demo_case_002.dart';
 import 'package:nexus_mortis/game/puzzles/data/demo_case_003.dart';
 import 'package:nexus_mortis/game/puzzles/validation/case_integrity_validator.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 
 void main() {
   final validator = CaseIntegrityValidator(
     solver: PuzzleSolver(),
-    simulator: const PuzzleSimulator(),
+    simulator: const HumanDeductionReplay(),
   );
 
   final cases = [

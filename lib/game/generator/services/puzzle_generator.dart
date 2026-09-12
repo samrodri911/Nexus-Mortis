@@ -11,7 +11,7 @@ import 'package:nexus_mortis/game/generator/services/difficulty_calibrator.dart'
 import 'package:nexus_mortis/game/generator/services/mystery_generator.dart';
 import 'package:nexus_mortis/game/generator/services/object_placer.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_quality_evaluator.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/generator/services/solution_generator.dart';
 import 'package:nexus_mortis/game/generator/services/uniqueness_validator.dart';
 import 'package:nexus_mortis/game/generator/services/zone_generator.dart';
@@ -51,7 +51,7 @@ class PuzzleGenerator {
     const deductionChainGenerator = DeductionChainGenerator();
     final uniquenessValidator = UniquenessValidator(_solver);
     final difficultyCalibrator = DifficultyCalibrator(_analyzer);
-    const simulator = PuzzleSimulator();
+    const simulator = HumanDeductionReplay();
     const evaluator = PuzzleQualityEvaluator(simulator);
 
     int solverCalls = 0;
@@ -155,11 +155,13 @@ class PuzzleGenerator {
       if (nodes == -1) continue;
       visitedNodes += nodes;
 
+      final simResult = simulator.simulate(tempCase, tempCase.clues);
       final analysis = difficultyCalibrator.calibrate(
         tempCase,
         config.targetDifficulty,
         minScore: config.minDifficultyScore,
         maxScore: config.maxDifficultyScore,
+        simResult: simResult,
       );
       if (analysis == null) continue;
 

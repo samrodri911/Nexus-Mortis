@@ -381,29 +381,28 @@ class PuzzleSolver {
 
         case BoardRuleType.singleOccupantZone:
           if (rule.targetId != null) {
+            final targetZone = rule.targetId;
+            if (victimPos != null && zoneMap[victimPos] == targetZone) return false;
+            if (killerPos != null && zoneMap[killerPos] == targetZone) return false;
             int count = 0;
             for (final pos in assignments.values) {
-              if (zoneMap[pos] == rule.targetId) count++;
+              if (zoneMap[pos] == targetZone) count++;
             }
             if (count > 1) return false;
           }
           break;
 
         case BoardRuleType.crimeSceneHasObject:
-          if (victimPos != null) {
-            final vZone = zoneMap[victimPos];
-            if (vZone != null && !zonesWithObjects.contains(vZone)) {
-              return false;
-            }
+          final crimeZone = victimPos != null ? zoneMap[victimPos] : (killerPos != null ? zoneMap[killerPos] : null);
+          if (crimeZone != null && !zonesWithObjects.contains(crimeZone)) {
+            return false;
           }
           break;
 
         case BoardRuleType.crimeSceneHasNoObject:
-          if (victimPos != null) {
-            final vZone = zoneMap[victimPos];
-            if (vZone != null && zonesWithObjects.contains(vZone)) {
-              return false;
-            }
+          final crimeZone = victimPos != null ? zoneMap[victimPos] : (killerPos != null ? zoneMap[killerPos] : null);
+          if (crimeZone != null && zonesWithObjects.contains(crimeZone)) {
+            return false;
           }
           break;
       }

@@ -2,13 +2,13 @@ import 'package:nexus_mortis/game/generator/services/puzzle_generator.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
 import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_quality_evaluator.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'dart:io';
 
 void main() async {
   final generator = PuzzleGenerator();
   final evaluator = PuzzleQualityEvaluator();
-  final simulator = PuzzleSimulator();
+  const simulator = HumanDeductionReplay();
 
   final log = StringBuffer();
   log.writeln('# REPORTE DE GENERACIÓN DE PUZZLES');

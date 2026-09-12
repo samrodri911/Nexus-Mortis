@@ -36,14 +36,17 @@ void main() {
       expect(nextCase.id, 'case_001');
     });
 
-    test('getNextCase genera un lote de 10 casos procedurales (case_004..case_013) al completar los estáticos', () async {
+    test('getNextCase genera un nuevo lote de 10 casos procedurales (case_011..case_020) al avanzar en la campaña', () async {
       final pCompleted = PlayerProgress(
         coins: 100,
-        totalStars: 9,
+        totalStars: 21,
         completedCases: {
-          'case_001': const CaseProgress(caseId: 'case_001', completed: true, starsEarned: 3),
-          'case_002': const CaseProgress(caseId: 'case_002', completed: true, starsEarned: 3),
-          'case_003': const CaseProgress(caseId: 'case_003', completed: true, starsEarned: 3),
+          for (int i = 1; i <= 8; i++)
+            'case_${i.toString().padLeft(3, '0')}': CaseProgress(
+              caseId: 'case_${i.toString().padLeft(3, '0')}',
+              completed: true,
+              starsEarned: 3,
+            ),
         },
       );
 
@@ -56,10 +59,10 @@ void main() {
       );
 
       final nextCase = await service.getNextCase();
-      expect(nextCase.id, 'case_004');
+      expect(nextCase.id, 'case_009');
       
       final availableCases = await service.getAvailableCases();
-      expect(availableCases.length, greaterThanOrEqualTo(13));
+      expect(availableCases.length, greaterThanOrEqualTo(20));
     });
   });
 }

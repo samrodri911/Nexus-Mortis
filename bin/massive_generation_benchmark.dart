@@ -1,28 +1,19 @@
 import 'dart:io';
-import 'package:nexus_mortis/data/repositories/in_memory_campaign_case_repository.dart';
 import 'package:nexus_mortis/game/difficulty/difficulty_analyzer.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_generator.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_origin.dart';
-import 'package:nexus_mortis/game/puzzles/services/case_campaign_service.dart';
 import 'package:nexus_mortis/game/puzzles/validation/case_integrity_validator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 
 void main() async {
   final solver = PuzzleSolver();
-  const simulator = PuzzleSimulator();
+  const simulator = HumanDeductionReplay();
   final validator = CaseIntegrityValidator(solver: solver, simulator: simulator);
   final analyzer = DifficultyAnalyzer(solver);
   final generator = PuzzleGenerator(solver: solver, analyzer: analyzer);
-  final repo = InMemoryCampaignCaseRepository();
-  final campaignService = CaseCampaignService(
-    campaignCaseRepository: repo,
-    puzzleGenerator: generator,
-    validator: validator,
-    analyzer: analyzer,
-  );
 
   stdout.writeln('========================================================================================================================');
   stdout.writeln('                              NEXUS MORTIS — REPORTE DE GENERACIÓN MASIVA (100 CASOS)                                 ');
@@ -44,15 +35,10 @@ void main() async {
   buffer.writeln('|---|---|---|---|---|---|---|---|---|---|---|---|');
 
   for (int level = 1; level <= 100; level++) {
-    // Para los primeros 3 casos usamos los estáticos de la campaña
     CaseData caseData;
     int attempts = 1;
 
-    if (level <= 3) {
-      caseData = campaignService.staticSource.allCases[level - 1];
-    } else {
-      // Procedural level
-      final (rows, cols, suspects, objects, targetScore, minScore, maxScore) = _getLevelParams(level);
+    final (rows, cols, suspects, objects, targetScore, minScore, maxScore) = _getLevelParams(level);
 
       CaseData? generated;
       for (int att = 0; att < 120; att++) {
@@ -128,9 +114,7 @@ void main() async {
           origin: CaseOrigin.campaign,
         );
       }
-
       caseData = generated;
-    }
 
     final valResult = validator.validateDetailed(caseData);
     if (valResult.isValid) {

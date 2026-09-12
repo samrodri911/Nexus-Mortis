@@ -66,8 +66,8 @@ void main() {
     test('generate crea un puzzle válido y determinista dada una semilla', () {
       final generator = PuzzleGenerator();
       final config = GeneratorConfig(
-        rows: 3,
-        columns: 3,
+        rows: 4,
+        columns: 4,
         suspectCount: 3,
         objectCount: 2,
         randomSeed: 12345,

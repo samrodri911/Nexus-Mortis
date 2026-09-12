@@ -5,7 +5,6 @@ import 'package:nexus_mortis/game/achievements/models/achievement_condition_type
 import 'package:nexus_mortis/game/achievements/models/achievement_definition.dart';
 import 'package:nexus_mortis/game/achievements/models/achievement_progress.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
-import 'package:nexus_mortis/game/puzzles/case_registry.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/results/models/game_result.dart';
 import 'package:nexus_mortis/game/statistics/models/player_statistics.dart';
@@ -41,8 +40,7 @@ class AchievementService {
     required PlayerProgress playerProgress,
     List<CaseData> campaignCases = const [],
   }) async {
-    final effectiveCampaignCases =
-        campaignCases.isNotEmpty ? campaignCases : CaseRegistry.cases;
+    final effectiveCampaignCases = campaignCases;
 
     final updatedMap = Map<String, AchievementProgress>.from(progressMap);
     final newlyUnlocked = <AchievementDefinition>[];

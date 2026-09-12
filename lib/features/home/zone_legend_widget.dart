@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:nexus_mortis/game/board/models/zone_visual_config.dart';
+import 'package:nexus_mortis/game/board/models/zone_visual_theme.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 
 /// Barra elegante de leyenda visual para las zonas del caso.
 ///
-/// Permite al jugador identificar inequívocamente cada color y nombre de zona
-/// de forma accesible, nítida y sin interferir con los elementos del tablero Flame.
+/// Permite al jugador identificar inequívocamente cada habitación
+/// de forma accesible, combinando icono temático, nombre y acento de color.
 class ZoneLegendWidget extends StatelessWidget {
   const ZoneLegendWidget({
     super.key,
@@ -22,10 +22,10 @@ class ZoneLegendWidget extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF141419),
+        color: const Color(0xFF11131A),
         border: Border(
-          top: BorderSide(color: Colors.white.withAlpha(15)),
-          bottom: BorderSide(color: Colors.white.withAlpha(15)),
+          top: BorderSide(color: Colors.white.withAlpha(12)),
+          bottom: BorderSide(color: Colors.white.withAlpha(12)),
         ),
       ),
       child: SingleChildScrollView(
@@ -35,45 +35,36 @@ class ZoneLegendWidget extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: List.generate(zones.length, (index) {
             final zone = zones[index];
-            final color = ZoneVisualConfig.getColorForIndex(index);
+            final theme = ZoneVisualTheme.fromZoneName(zone.name, index);
+            final accent = theme.accentColor;
 
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 4),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: color.withAlpha(25),
+                color: accent.withAlpha(20),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: color.withAlpha(120),
-                  width: 1.2,
+                  color: accent.withAlpha(90),
+                  width: 1.0,
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withAlpha(100),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
+                  Icon(
+                    theme.icon,
+                    size: 13,
+                    color: accent,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
                     zone.name ?? zone.id.toUpperCase(),
                     style: TextStyle(
-                      color: Colors.white.withAlpha(230),
-                      fontSize: 12,
+                      color: Colors.white.withAlpha(235),
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3,
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ],

@@ -19,6 +19,7 @@ class CluePanel extends StatefulWidget {
 }
 
 class _CluePanelState extends State<CluePanel> {
+  bool _isExpanded = false; // Colapsado por defecto para maximizar espacio del tablero
   bool _showDescription = false;
 
   @override
@@ -26,146 +27,245 @@ class _CluePanelState extends State<CluePanel> {
     final caseData = widget.caseData;
     final clues = widget.controller.clues;
 
-    return Container(
+    final globalRulesCount = caseData?.globalRules.length ?? 0;
+    final totalClues = globalRulesCount + clues.length;
+    final countLabel = totalClues == 1 ? '1 disponible' : '$totalClues disponibles';
+
+    final screenH = MediaQuery.sizeOf(context).height;
+    // Altura adaptativa para el estado expandido: protege el espacio del tablero en móviles pequeños
+    final maxExpandedH = (screenH * 0.32).clamp(180.0, 240.0);
+    final currentHeight = _isExpanded ? maxExpandedH : 46.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOutCubic,
       width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 200),
-      decoration: const BoxDecoration(
-        color: Color(0xFF14141E),
+      height: currentHeight,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFF14141E),
         border: Border(
-          top: BorderSide(color: Color(0xFF28283C), width: 1.5),
+          top: BorderSide(
+            color: _isExpanded ? const Color(0xFF384460) : const Color(0xFF28283C),
+            width: 1.5,
+          ),
         ),
+        boxShadow: _isExpanded
+            ? [
+                BoxShadow(
+                  color: Colors.black.withAlpha(90),
+                  blurRadius: 8,
+                  offset: const Offset(0, -3),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // Header con título y botón de caso
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            color: const Color(0xFF1A1A28),
-            child: Row(
-              children: [
-                const Icon(Icons.badge_outlined, color: Color(0xFFFFD700), size: 16),
-                const SizedBox(width: 6),
-                const Text(
-                  'TARJETAS DE DECLARACIÓN',
-                  style: TextStyle(
-                    color: Color(0xFFE2E2F0),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    letterSpacing: 1.1,
+          // Barra de cabecera compacta táctil (Estado COLLAPSED / toggle)
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              color: _isExpanded ? const Color(0xFF1A1A28) : const Color(0xFF14141E),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.lightbulb_outline_rounded,
+                    color: Color(0xFFFFD700),
+                    size: 18,
                   ),
-                ),
-                const Spacer(),
-                if (caseData != null && caseData.description.isNotEmpty)
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _showDescription = !_showDescription;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _showDescription ? Icons.visibility_off : Icons.menu_book,
-                            color: const Color(0xFF8C9EFF),
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _showDescription ? 'Ocultar Caso' : 'Ver Caso',
-                            style: const TextStyle(
-                              color: Color(0xFF8C9EFF),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                  const SizedBox(width: 8),
+                  const Text(
+                    'PISTAS',
+                    style: TextStyle(
+                      color: Color(0xFFE2E2F0),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Badge con indicador de pistas disponibles
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1F293D),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0xFF3B4D70),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Text(
+                      countLabel,
+                      style: const TextStyle(
+                        color: Color(0xFF90CAF9),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ),
-              ],
+                  const Spacer(),
+                  // Botón "Ver Caso" (solo cuando está expandido)
+                  if (_isExpanded && caseData != null && caseData.description.isNotEmpty) ...[
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _showDescription = !_showDescription;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _showDescription ? Icons.visibility_off : Icons.menu_book,
+                              color: const Color(0xFF8C9EFF),
+                              size: 13,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _showDescription ? 'Ocultar Caso' : 'Ver Caso',
+                              style: const TextStyle(
+                                color: Color(0xFF8C9EFF),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  // Icono indicador de expansión/colapso
+                  Icon(
+                    _isExpanded
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_up_rounded,
+                    color: Colors.white70,
+                    size: 22,
+                  ),
+                ],
+              ),
             ),
           ),
 
-          // Contexto / Descripción expandible
-          if (_showDescription && caseData != null)
-            Container(
-              padding: const EdgeInsets.all(10),
-              color: const Color(0xFF1F1F30),
-              child: Text(
-                caseData.description,
-                style: const TextStyle(
-                  color: Color(0xFFD0D0E2),
-                  fontSize: 12,
-                  height: 1.3,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
-
-          // Reglas globales del escenario (si existen)
-          if (caseData != null && caseData.globalRules.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-              child: Column(
-                children: caseData.globalRules.map((rule) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    margin: const EdgeInsets.only(bottom: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF232338),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF434368), width: 0.8),
-                    ),
-                    child: Row(
+          // Contenido desplegable (activo solo cuando está EXPANDED)
+          if (_isExpanded)
+            Expanded(
+              child: clues.isEmpty && (caseData == null || caseData.globalRules.isEmpty)
+                  ? const Center(
+                      child: Text(
+                        'No hay tarjetas de pistas disponibles.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       children: [
-                        const Icon(Icons.rule, color: Color(0xFF80DEEA), size: 14),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            rule.text,
-                            style: const TextStyle(
-                              color: Color(0xFFE0F7FA),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                        // Contexto / Descripción del caso
+                        if (_showDescription && caseData != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1F1F30),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF383850)),
+                            ),
+                            child: Text(
+                              caseData.description,
+                              style: const TextStyle(
+                                color: Color(0xFFD0D0E2),
+                                fontSize: 11.5,
+                                height: 1.3,
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
+
+                        // Reglas globales del escenario (si existen)
+                        if (caseData != null && caseData.globalRules.isNotEmpty)
+                          ...caseData.globalRules.map((rule) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              margin: const EdgeInsets.only(bottom: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF182332),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF00ACC1), width: 1.2),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00ACC1).withAlpha(50),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFF00ACC1), width: 1),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.gavel_rounded, color: Color(0xFF80DEEA), size: 11),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'PISTA GENERAL',
+                                          style: TextStyle(
+                                            color: Color(0xFF80DEEA),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 9.5,
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      rule.text,
+                                      style: const TextStyle(
+                                        color: Color(0xFFE0F7FA),
+                                        fontSize: 11.5,
+                                        height: 1.25,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+
+                        // Lista de tarjetas de declaraciones de sospechosos
+                        ...clues.map((clue) {
+                          final suspectName = _resolveSuspectName(clue.suspectId, caseData);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: _SuspectClueCardWidget(
+                              clue: clue,
+                              suspectName: suspectName,
+                            ),
+                          );
+                        }),
                       ],
                     ),
-                  );
-                }).toList(),
-              ),
             ),
-
-          // Lista de tarjetas de sospechosos
-          Expanded(
-            child: clues.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No hay tarjetas de pistas disponibles.',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    itemCount: clues.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
-                    itemBuilder: (context, index) {
-                      final clue = clues[index];
-                      final suspectName = _resolveSuspectName(clue.suspectId, caseData);
-                      return _SuspectClueCardWidget(
-                        clue: clue,
-                        suspectName: suspectName,
-                      );
-                    },
-                  ),
-          ),
         ],
       ),
     );

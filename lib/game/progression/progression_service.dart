@@ -26,8 +26,11 @@ class ProgressionService {
   /// Determina si un caso está desbloqueado basándose en las dependencias
   /// del propio caso, el progreso actual o la secuencia del listado de campaña.
   bool isCaseUnlocked(CaseData caseData, {List<CaseData>? allCases, int? index}) {
-    if (caseData.requiredCaseId == null) {
-      return true; // No requiere caso previo.
+    // 1. Si no requiere caso previo, o es el primer caso de la lista (índice 0 o primer elemento), SIEMPRE está desbloqueado
+    if (caseData.requiredCaseId == null ||
+        index == 0 ||
+        (allCases != null && allCases.isNotEmpty && allCases.first.id == caseData.id)) {
+      return true;
     }
 
     if (progress.completedCases.containsKey(caseData.requiredCaseId)) {

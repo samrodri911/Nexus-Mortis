@@ -6,7 +6,7 @@ import 'package:nexus_mortis/data/local/mappers/case_data_mapper.dart';
 import 'package:nexus_mortis/data/local/models/campaign_case_entity.dart';
 import 'package:nexus_mortis/data/repositories/campaign_case_repository.dart';
 import 'package:nexus_mortis/game/difficulty/difficulty_analyzer.dart';
-import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
+import 'package:nexus_mortis/game/difficulty/models/level_policy.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_generator.dart';
 import 'package:nexus_mortis/game/progression/models/player_progress.dart';
@@ -14,62 +14,75 @@ import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_origin.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/services/case_identity_factory.dart';
-import 'package:nexus_mortis/game/puzzles/sources/static_case_source.dart';
 import 'package:nexus_mortis/game/puzzles/validation/case_integrity_validator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 
-/// Define la política de configuración estructural y rango de dificultad objetivo
-/// para un nivel específico de la campaña.
-class LevelPolicy {
-  const LevelPolicy({
-    required this.rows,
-    required this.cols,
-    required this.suspects,
-    required this.objects,
-    required this.targetDifficulty,
-    required this.minDifficultyScore,
-    required this.maxDifficultyScore,
+/// Registro de diagnóstico detallado para un intento fallido de generación.
+class GenerationRejectionDiagnostic {
+  const GenerationRejectionDiagnostic({
+    required this.attempt,
+    required this.seed,
+    required this.reason,
+    this.details,
   });
 
-  final int rows;
-  final int cols;
-  final int suspects;
-  final int objects;
-  final DifficultyLevel targetDifficulty;
-  final int minDifficultyScore;
-  final int maxDifficultyScore;
+  final int attempt;
+  final int seed;
+  final String reason;
+  final String? details;
+
+  @override
+  String toString() => 'Intento $attempt (seed: $seed): $reason ${details != null ? "[$details]" : ""}';
 }
 
-/// Servicio de gestión de la Campaña Continua de Nexus Mortis con progresión suave de dificultad.
+/// Servicio de gestión de la Campaña Continua de Nexus Mortis 100% procedural.
+///
+/// La campaña no utiliza ningún caso estático o demo; todos los niveles (0..N)
+/// son generados proceduralmente, validados bajo doble verificación (Solver + HumanReplay),
+/// calibrados según su [LevelPolicy] y persistidos en el repositorio local.
 class CaseCampaignService {
   CaseCampaignService({
     required this.campaignCaseRepository,
-    this.staticSource = const StaticCaseSource(),
     PuzzleGenerator? puzzleGenerator,
     CaseIntegrityValidator? validator,
     DifficultyAnalyzer? analyzer,
+    HumanDeductionReplay? replay,
     this.identityFactory = const CaseIdentityFactory(),
   })  : _puzzleGenerator = puzzleGenerator ?? PuzzleGenerator(),
         _validator = validator ?? CaseIntegrityValidator(),
-        _analyzer = analyzer ?? DifficultyAnalyzer(PuzzleSolver());
+        _analyzer = analyzer ?? DifficultyAnalyzer(PuzzleSolver()),
+        _replay = replay ?? const HumanDeductionReplay();
 
   final CampaignCaseRepository campaignCaseRepository;
-  final StaticCaseSource staticSource;
   final PuzzleGenerator _puzzleGenerator;
   final CaseIntegrityValidator _validator;
   final DifficultyAnalyzer _analyzer;
+  final HumanDeductionReplay _replay;
   final CaseIdentityFactory identityFactory;
 
   List<CaseData>? _cachedCases;
 
-  /// Retorna la lista ordenada completa de todos los casos disponibles en la campaña.
+  /// Retorna la lista ordenada completa de todos los casos generados y persistidos en la campaña.
   Future<List<CaseData>> getAvailableCases() async {
     if (_cachedCases != null) {
       return _cachedCases!;
     }
 
-    final staticCases = staticSource.allCases;
     final entities = await campaignCaseRepository.getAllCases();
+
+    // Detección automática y saneamiento de datos legacy (cuando la persistencia previa empezaba en case_004 o carecía de reglas globales en algún caso)
+    final hasLegacyOrMissingRules = entities.isNotEmpty &&
+        (!entities.any((e) => e.caseId == 'case_001') ||
+            entities.first.caseIndex != 0 ||
+            !entities.every((e) => e.caseJson != null && e.caseJson!.contains('"globalRules":[{')));
+
+    if (hasLegacyOrMissingRules) {
+      await campaignCaseRepository.clear();
+      _cachedCases = null;
+      await _generateNextBatch(currentTotal: 0);
+      return _cachedCases!;
+    }
 
     final proceduralCases = <CaseData>[];
     for (final entity in entities) {
@@ -79,11 +92,11 @@ class CaseCampaignService {
       }
     }
 
-    _cachedCases = [...staticCases, ...proceduralCases];
+    _cachedCases = proceduralCases;
     return _cachedCases!;
   }
 
-  /// Busca un caso por su identificador único (ej: 'case_001', 'case_004').
+  /// Busca un caso por su identificador único (ej: 'case_001', 'case_010').
   Future<CaseData?> getCase(String id) async {
     final allCases = await getAvailableCases();
     for (final c in allCases) {
@@ -92,22 +105,21 @@ class CaseCampaignService {
     return null;
   }
 
-  /// Asegura que exista un lote inicial (mínimo 13 casos en total: 3 estáticos + 10 procedurales)
-  /// o genera un nuevo lote de 10 casos si el jugador se aproxima al final de la lista.
+  /// Asegura que exista un lote inicial de al menos 10 casos procedurales (Niveles 0..9)
+  /// o genera un nuevo lote de 10 niveles si el jugador se aproxima al final de la lista.
   Future<void> ensureBatchAvailable(PlayerProgress progress) async {
     final cases = await getAvailableCases();
 
-    // 1. Si no se ha generado el primer lote (total < 13), generarlo inmediatamente (04..13)
-    if (cases.length < 13) {
-      await _generateNextBatch(currentTotal: cases.length);
+    // 1. Si no se ha generado el primer lote (0 casos), generarlo inmediatamente (0..9)
+    if (cases.isEmpty) {
+      await _generateNextBatch(currentTotal: 0);
       return;
     }
 
-    // 2. Proactividad de campaña: Si el jugador ha completado casos hasta quedar cerca del final
-    // (o completó el último caso disponible), generamos 10 casos adicionales inmediatamente.
+    // 2. Proactividad de campaña: Si quedan menos de 4 casos sin completar o se completó el último
     final completedCount = cases.where((c) => progress.completedCases.containsKey(c.id)).length;
     final remainingUncompleted = cases.length - completedCount;
-    if (remainingUncompleted < 4 || (cases.isNotEmpty && progress.completedCases.containsKey(cases.last.id))) {
+    if (remainingUncompleted < 4 || progress.completedCases.containsKey(cases.last.id)) {
       await _generateNextBatch(currentTotal: cases.length);
     }
   }
@@ -120,7 +132,8 @@ class CaseCampaignService {
     for (int i = 0; i < cases.length; i++) {
       final c = cases[i];
       final isCompleted = progress.completedCases.containsKey(c.id);
-      final isUnlocked = c.requiredCaseId == null ||
+      final isUnlocked = i == 0 ||
+          c.requiredCaseId == null ||
           progress.completedCases.containsKey(c.requiredCaseId) ||
           (i > 0 && progress.completedCases.containsKey(cases[i - 1].id));
 
@@ -132,205 +145,166 @@ class CaseCampaignService {
     return null;
   }
 
-  /// Calcula la política estructural y el rango de score objetivo para un índice de nivel.
-  LevelPolicy _levelPolicy(int levelIndex) {
-    // 1. Bloques de tamaño de cuadrícula (aproximadamente cada 10 niveles)
-    final int rows;
-    final int cols;
-    final int suspects;
-    final int objects;
-
-    if (levelIndex <= 10) {
-      rows = 4;
-      cols = 4;
-      suspects = 3;
-      objects = 2;
-    } else if (levelIndex <= 20) {
-      rows = 5;
-      cols = 5;
-      suspects = 4;
-      objects = 3;
-    } else if (levelIndex <= 30) {
-      rows = 5;
-      cols = 5;
-      suspects = levelIndex <= 25 ? 4 : 5;
-      objects = 3;
-    } else if (levelIndex <= 40) {
-      rows = 6;
-      cols = 5;
-      suspects = 5;
-      objects = levelIndex <= 35 ? 3 : 4;
-    } else {
-      rows = 6;
-      cols = 6;
-      suspects = levelIndex <= 60 ? 5 : 6;
-      objects = 4;
-    }
-
-    // 2. Curva continua y progresiva de dificultad objetivo
-    final double target = 22.0 + (levelIndex - 1) * 0.70;
-    final int targetScore = target.round().clamp(20, 95);
-
-    // Tolerancia controlada (±12 puntos de dificultad) para permitir variabilidad natural sin saltos bruscos
-    final int minScore = (targetScore - 12).clamp(10, 95);
-    final int maxScore = (targetScore + 12).clamp(20, 100);
-
-    final DifficultyLevel diffLevel;
-    if (targetScore <= 35) {
-      diffLevel = DifficultyLevel.easy;
-    } else if (targetScore <= 65) {
-      diffLevel = DifficultyLevel.medium;
-    } else {
-      diffLevel = DifficultyLevel.hard;
-    }
-
-    return LevelPolicy(
-      rows: rows,
-      cols: cols,
-      suspects: suspects,
-      objects: objects,
-      targetDifficulty: diffLevel,
-      minDifficultyScore: minScore,
-      maxDifficultyScore: maxScore,
-    );
-  }
-
-  /// Genera y persiste un lote de exactamente 10 casos procedurales con dificultad progresiva.
+  /// Genera y persiste un lote de 10 casos procedurales de forma independiente y transaccional.
   Future<void> _generateNextBatch({required int currentTotal}) async {
-    final newEntities = <CampaignCaseEntity>[];
     final random = Random();
+    int? lastScore;
 
-    int nextIndex = currentTotal + 1;
-    String lastCaseId = currentTotal > 0 ? (await getAvailableCases()).last.id : 'case_003';
+    if (currentTotal > 0) {
+      final existing = await getAvailableCases();
+      if (existing.isNotEmpty) {
+        final lastCase = existing.last;
+        final lastSim = _replay.simulate(lastCase, lastCase.clues);
+        lastScore = _analyzer.calculateScore(lastCase, simResult: lastSim);
+      }
+    }
+
+    String? lastCaseId = currentTotal > 0 ? (await getAvailableCases()).last.id : null;
 
     for (int i = 0; i < 10; i++) {
-      final caseIndex = nextIndex + i;
-      final caseId = 'case_${caseIndex.toString().padLeft(3, '0')}';
-      final seed = random.nextInt(9000000) + 1000000;
+      final levelIndex = currentTotal + i;
+      final caseNumber = levelIndex + 1;
+      final caseId = 'case_${caseNumber.toString().padLeft(3, '0')}';
+      final baseSeed = random.nextInt(9000000) + 1000000;
 
-      final policy = _levelPolicy(caseIndex);
+      final policy = LevelPolicy.forLevel(levelIndex);
+      final diagnostics = <GenerationRejectionDiagnostic>[];
 
       CaseData? validCase;
-      int winningSeed = seed;
+      int winningSeed = baseSeed;
       int winningScore = 0;
 
-      for (int attempt = 0; attempt < 120; attempt++) {
-        final currentSeed = seed + attempt * 17;
+      for (int attempt = 0; attempt < 150; attempt++) {
+        final currentSeed = baseSeed + attempt * 17;
         final attemptConfig = GeneratorConfig(
           rows: policy.rows,
-          columns: policy.cols,
-          suspectCount: policy.suspects,
-          objectCount: policy.objects,
+          columns: policy.columns,
+          suspectCount: policy.suspectCount,
+          objectCount: policy.objectCount,
           targetDifficulty: policy.targetDifficulty,
           minDifficultyScore: policy.minDifficultyScore,
           maxDifficultyScore: policy.maxDifficultyScore,
           randomSeed: currentSeed,
-          maxAttempts: 3,
+          maxAttempts: 10,
         );
 
         final result = _puzzleGenerator.generate(attemptConfig);
-        if (result != null) {
-          final candidate = CaseData(
-            id: caseId,
-            title: 'Expediente #${caseIndex.toString().padLeft(2, '0')}: ${result.caseData.title}',
-            description: result.caseData.description,
-            difficulty: result.caseData.difficulty,
-            boardRows: result.caseData.boardRows,
-            boardColumns: result.caseData.boardColumns,
-            zones: result.caseData.zones,
-            suspects: result.caseData.suspects,
-            victimId: result.caseData.victimId,
-            killerId: result.caseData.killerId,
-            placedObjects: result.caseData.placedObjects,
-            clues: result.caseData.clues,
-            globalRules: result.caseData.globalRules,
-            solution: result.caseData.solution,
-            requiredCaseId: lastCaseId,
-            origin: CaseOrigin.campaign,
-          );
-
-          final valResult = _validator.validateDetailed(candidate);
-          if (valResult.isValid) {
-            final analysis = _analyzer.analyze(candidate);
-            if (analysis.difficultyScore >= policy.minDifficultyScore &&
-                analysis.difficultyScore <= policy.maxDifficultyScore) {
-              validCase = candidate;
-              winningSeed = currentSeed;
-              winningScore = analysis.difficultyScore;
-              break;
-            }
-          }
+        if (result == null) {
+          diagnostics.add(GenerationRejectionDiagnostic(
+            attempt: attempt + 1,
+            seed: currentSeed,
+            reason: 'puzzle_generator_null_result',
+          ));
+          continue;
         }
+
+        final candidate = CaseData(
+          id: caseId,
+          title: 'Expediente #${caseNumber.toString().padLeft(2, '0')}: ${result.caseData.title}',
+          description: result.caseData.description,
+          difficulty: result.caseData.difficulty,
+          boardRows: result.caseData.boardRows,
+          boardColumns: result.caseData.boardColumns,
+          zones: result.caseData.zones,
+          suspects: result.caseData.suspects,
+          victimId: result.caseData.victimId,
+          killerId: result.caseData.killerId,
+          placedObjects: result.caseData.placedObjects,
+          clues: result.caseData.clues,
+          globalRules: result.caseData.globalRules,
+          solution: result.caseData.solution,
+          requiredCaseId: lastCaseId,
+          origin: CaseOrigin.campaign,
+        );
+
+        // 1. Regla obligatoria de campaña: Cada caso generado debe tener exactamente 1 regla global activa
+        if (candidate.globalRules.length != 1) {
+          diagnostics.add(GenerationRejectionDiagnostic(
+            attempt: attempt + 1,
+            seed: currentSeed,
+            reason: 'campaign_case_requires_exact_one_global_rule',
+          ));
+          continue;
+        }
+
+        // 2. Doble Validación de Integridad (Solver + HumanReplay == GroundTruth)
+        final valResult = _validator.validateDetailed(candidate);
+        if (!valResult.isValid) {
+          diagnostics.add(GenerationRejectionDiagnostic(
+            attempt: attempt + 1,
+            seed: currentSeed,
+            reason: 'integrity_validator_rejected: ${valResult.rejectionReason?.name}',
+            details: valResult.details,
+          ));
+          continue;
+        }
+
+        // 2. Simulación Humana para cálculo de Dificultad Deductiva Real
+        final simResult = _replay.simulate(candidate, candidate.clues);
+        final score = _analyzer.calculateScore(candidate, simResult: simResult);
+
+        // 3. Verificación de Rango de Política
+        if (score < policy.minDifficultyScore || score > policy.maxDifficultyScore) {
+          diagnostics.add(GenerationRejectionDiagnostic(
+            attempt: attempt + 1,
+            seed: currentSeed,
+            reason: 'difficulty_score_out_of_range',
+            details: 'score: $score, expected: [${policy.minDifficultyScore}..${policy.maxDifficultyScore}]',
+          ));
+          continue;
+        }
+
+        // 4. Verificación de Continuidad con el Nivel Anterior (evitar picos)
+        if (lastScore != null && (score - lastScore).abs() > policy.maxDeltaFromPrevious) {
+          diagnostics.add(GenerationRejectionDiagnostic(
+            attempt: attempt + 1,
+            seed: currentSeed,
+            reason: 'progression_jump_too_large',
+            details: 'delta: ${(score - lastScore).abs()}, maxAllowed: ${policy.maxDeltaFromPrevious}',
+          ));
+          continue;
+        }
+
+        // ¡Caso 100% Válido y Calibrado!
+        validCase = candidate;
+        winningSeed = currentSeed;
+        winningScore = score;
+        break;
       }
 
-      // Si ningún caso cumplió el rango estricto tras 120 intentos, aceptar el mejor generado que sea válido
       if (validCase == null) {
-        for (int fallbackAttempt = 0; fallbackAttempt < 30; fallbackAttempt++) {
-          final fallbackSeed = seed + 5000 + fallbackAttempt * 19;
-          final fallbackConfig = GeneratorConfig(
-            rows: policy.rows,
-            columns: policy.cols,
-            suspectCount: policy.suspects,
-            objectCount: policy.objects,
-            randomSeed: fallbackSeed,
-            maxAttempts: 3,
-          );
-          final result = _puzzleGenerator.generate(fallbackConfig);
-          if (result != null) {
-            final candidate = CaseData(
-              id: caseId,
-              title: 'Expediente #${caseIndex.toString().padLeft(2, '0')}: ${result.caseData.title}',
-              description: result.caseData.description,
-              difficulty: result.caseData.difficulty,
-              boardRows: result.caseData.boardRows,
-              boardColumns: result.caseData.boardColumns,
-              zones: result.caseData.zones,
-              suspects: result.caseData.suspects,
-              victimId: result.caseData.victimId,
-              killerId: result.caseData.killerId,
-              placedObjects: result.caseData.placedObjects,
-              clues: result.caseData.clues,
-              globalRules: result.caseData.globalRules,
-              solution: result.caseData.solution,
-              requiredCaseId: lastCaseId,
-              origin: CaseOrigin.campaign,
-            );
-            if (_validator.validate(candidate)) {
-              validCase = candidate;
-              winningSeed = fallbackSeed;
-              winningScore = _analyzer.analyze(candidate).difficultyScore;
-              break;
-            }
-          }
-        }
+        throw StateError(
+          'Error crítico de generación en Nivel $levelIndex ($caseId): '
+          'No se pudo generar un caso válido tras 150 intentos.\n'
+          'Política: ${policy.rows}x${policy.columns}, ${policy.suspectCount} sospechosos, '
+          'score objetivo: ${policy.targetDifficultyScore} (tolerancia: ±${policy.scoreTolerance}).\n'
+          'Últimos diagnósticos:\n${diagnostics.reversed.take(5).join("\n")}',
+        );
       }
 
-      if (validCase != null) {
-        final entity = CampaignCaseEntity()
-          ..caseId = caseId
-          ..caseIndex = caseIndex
-          ..title = validCase.title
-          ..description = validCase.description
-          ..difficulty = validCase.difficulty.name
-          ..difficultyScore = winningScore
-          ..seed = winningSeed
-          ..rows = validCase.boardRows
-          ..columns = validCase.boardColumns
-          ..suspects = validCase.suspects.length
-          ..objects = validCase.placedObjects.length
-          ..caseJson = jsonEncode(CaseDataMapper.toJson(validCase))
-          ..requiredCaseId = lastCaseId;
+      // Persistir de forma transaccional independiente cada nivel
+      final entity = CampaignCaseEntity()
+        ..caseId = caseId
+        ..caseIndex = levelIndex
+        ..title = validCase.title
+        ..description = validCase.description
+        ..difficulty = validCase.difficulty.name
+        ..difficultyScore = winningScore
+        ..seed = winningSeed
+        ..rows = validCase.boardRows
+        ..columns = validCase.boardColumns
+        ..suspects = validCase.suspects.length
+        ..objects = validCase.placedObjects.length
+        ..caseJson = jsonEncode(CaseDataMapper.toJson(validCase))
+        ..requiredCaseId = lastCaseId;
 
-        newEntities.add(entity);
-        lastCaseId = caseId;
-      }
+      await campaignCaseRepository.saveCases([entity]);
+      lastCaseId = caseId;
+      lastScore = winningScore;
     }
 
-    if (newEntities.isNotEmpty) {
-      await campaignCaseRepository.saveCases(newEntities);
-      _cachedCases = null; // Invalidar caché
-      await getAvailableCases(); // Recargar
-    }
+    _cachedCases = null; // Invalidar caché
+    await getAvailableCases(); // Recargar casos actualizados
   }
 
   CaseData? _reconstructFromEntity(CampaignCaseEntity entity) {
@@ -339,7 +313,7 @@ class CaseCampaignService {
         final decoded = jsonDecode(entity.caseJson!) as Map<String, dynamic>;
         return CaseDataMapper.fromJson(decoded);
       } catch (_) {
-        // Fallback a reconstrucción por generador si el JSON estuviera corrupto
+        // Fallback a reconstrucción por generador determinista si el JSON estuviera corrupto
       }
     }
 

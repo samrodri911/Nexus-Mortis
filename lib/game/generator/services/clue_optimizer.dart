@@ -5,7 +5,7 @@ import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 
 /// Selecciona y optimiza el conjunto de pistas utilizando simulación humana.
 class ClueOptimizer {
@@ -25,7 +25,7 @@ class ClueOptimizer {
       return (optimizedClues: initialCase.clues, solverCalls: solverCalls);
     }
 
-    final simulator = const PuzzleSimulator();
+    final simulator = const HumanDeductionReplay();
     final rand = _random ?? Random();
 
     // Clasificamos pistas para dar prioridad a anclajes (zonas, adyacencias y cardinales inmediatas)

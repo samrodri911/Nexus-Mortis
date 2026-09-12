@@ -6,7 +6,7 @@ import 'package:nexus_mortis/game/clues/models/spatial_constraint.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 import 'package:nexus_mortis/game/generator/services/puzzle_quality_evaluator.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
 import 'package:nexus_mortis/game/puzzles/data/demo_case_001.dart';
 import 'package:nexus_mortis/game/puzzles/models/board_rule_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
@@ -19,7 +19,7 @@ import 'package:nexus_mortis/game/puzzles/validation/case_integrity_validator.da
 import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 
 void main() {
-  const simulator = PuzzleSimulator();
+  const simulator = HumanDeductionReplay();
   const evaluator = PuzzleQualityEvaluator(simulator);
   final solver = PuzzleSolver();
   final validator = CaseIntegrityValidator(solver: solver, simulator: simulator);

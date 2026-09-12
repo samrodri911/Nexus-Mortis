@@ -5,7 +5,8 @@ import 'package:nexus_mortis/game/clues/models/spatial_clue_data.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_constraint.dart';
 import 'package:nexus_mortis/game/clues/models/spatial_relation.dart';
 import 'package:nexus_mortis/game/generator/services/clue_text_formatter.dart';
-import 'package:nexus_mortis/game/generator/services/puzzle_simulator.dart';
+import 'package:nexus_mortis/game/puzzles/validation/human_deduction_replay.dart';
+import 'package:nexus_mortis/game/clues/evaluators/spatial_clue_evaluator.dart';
 import 'package:nexus_mortis/game/puzzles/models/board_rule_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
@@ -19,11 +20,11 @@ import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 /// 4. Deducción del asesino en la zona de la víctima al finalizar el tablero.
 class DeductionChainGenerator {
   const DeductionChainGenerator({
-    this.simulator = const PuzzleSimulator(),
+    this.simulator = const HumanDeductionReplay(),
     this.formatter = const ClueTextFormatter(),
   });
 
-  final PuzzleSimulator simulator;
+  final HumanDeductionReplay simulator;
   final ClueTextFormatter formatter;
 
   /// Intenta construir una cadena deductiva válida para el [caseData] dado.
@@ -77,42 +78,58 @@ class DeductionChainGenerator {
 
         if (availableConstraints.isEmpty) break;
 
-        // Ordenar restricciones priorizando las más concretas y visuales
-        availableConstraints.sort((a, b) => _constraintPriority(b).compareTo(_constraintPriority(a)));
+        final prioritized = (List.of(availableConstraints)
+              ..sort((a, b) => _constraintPriority(b).compareTo(_constraintPriority(a))))
+            .take(16)
+            .toList();
 
-        bool validCardFound = false;
+        final prevCase = caseData.copyWith(clues: cards, globalRules: const []);
+        final prevSim = simulator.simulate(prevCase, cards);
+        final before = prevSim.domainSizes[s.id] ?? (caseData.boardRows * caseData.boardColumns);
 
-        // Probar combinaciones de restricciones, priorizando anclajes iniciales fuertes
-        for (int c1 = 0; c1 < availableConstraints.length; c1++) {
-          for (int c2 = c1; c2 < availableConstraints.length; c2++) {
-             final selectedConstraints = <SpatialConstraint>[];
-             selectedConstraints.add(availableConstraints[c1]);
-             if (c1 != c2) {
-               selectedConstraints.add(availableConstraints[c2]);
-             }
-             
-             final testClue = SpatialClueData(
-                id: 'clue_${s.id}',
-                suspectId: s.id,
-                text: '',
-                constraints: selectedConstraints,
-             );
-             
-             final tempCards = [...cards, testClue];
-             final tempCase = caseData.copyWith(clues: tempCards, globalRules: const []);
-             final simResult = simulator.simulate(tempCase, tempCards);
-             
-             // STRICT REJECTION: If candidate count > 1, reject immediately!
-             if (simResult.domainSizes[s.id] == 1) {
-                 cards.add(testClue);
-                 validCardFound = true;
-                 break;
-             }
+        SpatialClueData? bestClueForSuspect;
+        int minAfter = before;
+
+        // Probar combinaciones de restricciones buscando la reducción más efectiva
+        for (int c1 = 0; c1 < prioritized.length; c1++) {
+          for (int c2 = c1; c2 < prioritized.length; c2++) {
+            final selectedConstraints = <SpatialConstraint>[];
+            selectedConstraints.add(prioritized[c1]);
+            if (c1 != c2) {
+              selectedConstraints.add(prioritized[c2]);
+            }
+
+            final testClue = SpatialClueData(
+              id: 'clue_${s.id}',
+              suspectId: s.id,
+              text: '',
+              constraints: selectedConstraints,
+            );
+
+            final tempCards = [...cards, testClue];
+            final tempCase = caseData.copyWith(clues: tempCards, globalRules: const []);
+            final simResult = simulator.simulate(tempCase, tempCards);
+            final after = simResult.domainSizes[s.id] ?? 0;
+
+            if (after > 0 && after < minAfter) {
+              minAfter = after;
+              bestClueForSuspect = testClue;
+              if (after == 1 && c1 == c2) {
+                // Si con 1 sola restricción ya alcanza 1 candidato, es óptimo
+                break;
+              }
+            }
           }
-          if (validCardFound) break;
+          if (minAfter == 1 && bestClueForSuspect?.activeConstraints.length == 1) {
+            break;
+          }
         }
 
-        if (!validCardFound) break;
+        if (bestClueForSuspect != null && minAfter < before) {
+          cards.add(bestClueForSuspect);
+        } else {
+          break;
+        }
       }
 
       if (cards.length != suspects.length) continue;
@@ -141,35 +158,24 @@ class DeductionChainGenerator {
       }
 
       // =======================================================================
-      // EVALUACIÓN DEL ESPACIO RESIDUAL DE LA VÍCTIMA (SIN REGLAS GLOBALES)
+      // EVALUACIÓN DE CADENA DEDUCTIVA Y OPERADORES DE CLAUSURA GLOBAL
       // =======================================================================
-      final caseWithoutRules = caseData.copyWith(clues: formattedClues, globalRules: const []);
-      final baseSim = simulator.simulate(caseWithoutRules, formattedClues);
-
-      // CASO 1: Ya está cerrado determinísticamente sin reglas globales
-      if (_isValidSimulation(baseSim, caseData)) {
-        return (clues: formattedClues, globalRules: const <BoardRuleData>[]);
-      }
-
-      // CASO 2: Espacio residual ambiguo -> Buscar operador de clausura natural
+      // Buscar reglas globales verdaderas y semánticamente correctas para el escenario
       final candidateRules = _findTrueGlobalRules(caseData, zoneMap, zoneNames);
-      BoardRuleData? bestRule;
-      int bestReduction = -1;
+      BoardRuleData? bestUsefulRule;
+      int maxUsefulReduction = 0;
 
       for (final rule in candidateRules) {
         final caseWithRule = caseData.copyWith(clues: formattedClues, globalRules: [rule]);
         final simWithRule = simulator.simulate(caseWithRule, formattedClues);
 
         if (_isValidSimulation(simWithRule, caseData)) {
-          final vBefore = baseSim.victimCandidateCells;
-          final vAfter = simWithRule.victimCandidateCells;
-          final reduction = vBefore - vAfter;
+          final ruleSteps = simWithRule.trace.where((s) => s.sourceType == DeductionSourceType.globalRule && s.ruleId == rule.id);
+          final reduction = ruleSteps.fold<int>(0, (sum, s) => sum + s.reductionAmount);
 
-          // Exigir que la regla realmente haya reducido candidatos y cerrado a 1
-          if (vAfter == 1 && simWithRule.victimCandidateRooms == 1 && reduction > bestReduction) {
-            bestReduction = reduction;
-            bestRule = rule;
-            // Priorizar la regla canónica de ocupación de habitaciones
+          if (reduction > 0 && reduction > maxUsefulReduction) {
+            maxUsefulReduction = reduction;
+            bestUsefulRule = rule;
             if (rule.type == BoardRuleType.maxOnePersonPerRoomExceptCrime) {
               break;
             }
@@ -177,8 +183,27 @@ class DeductionChainGenerator {
         }
       }
 
-      if (bestRule != null) {
-        return (clues: formattedClues, globalRules: [bestRule]);
+      // 1. Si encontramos una regla global útil que aporta reducción real y resuelve el caso:
+      if (bestUsefulRule != null) {
+        return (clues: formattedClues, globalRules: [bestUsefulRule]);
+      }
+
+      // 2. Probar combinación dual de reglas si 1 no fue suficiente para cerrar ambigüedades
+      if (candidateRules.length >= 2) {
+        for (int r1 = 0; r1 < candidateRules.length; r1++) {
+          for (int r2 = r1 + 1; r2 < candidateRules.length; r2++) {
+            final dualRules = [candidateRules[r1], candidateRules[r2]];
+            final caseWithDual = caseData.copyWith(clues: formattedClues, globalRules: dualRules);
+            final simWithDual = simulator.simulate(caseWithDual, formattedClues);
+            if (_isValidSimulation(simWithDual, caseData)) {
+              final dualSteps = simWithDual.trace.where((s) => s.sourceType == DeductionSourceType.globalRule);
+              final dualReduction = dualSteps.fold<int>(0, (sum, s) => sum + s.reductionAmount);
+              if (dualReduction > 0) {
+                return (clues: formattedClues, globalRules: dualRules);
+              }
+            }
+          }
+        }
       }
     }
 
@@ -256,16 +281,26 @@ class DeductionChainGenerator {
     return rules;
   }
 
-  bool _isValidSimulation(PuzzleSimulationResult simResult, CaseData caseData) {
-    return simResult.solved &&
-        !simResult.stuck &&
-        !simResult.requiresGuessing &&
-        simResult.killerDeductionUnique &&
-        simResult.deducedKillerId == caseData.killerId &&
-        simResult.victimSolvedByExhaustion &&
-        simResult.victimCandidateCells == 1 &&
-        simResult.victimCandidateRooms == 1 &&
-        simResult.domainSizes.values.every((c) => c == 1);
+  bool _isValidSimulation(HumanDeductionReplayResult simResult, CaseData caseData) {
+    if (!simResult.solved ||
+        simResult.stuck ||
+        simResult.requiresGuessing ||
+        !simResult.killerDeductionUnique ||
+        simResult.deducedKillerId != caseData.killerId ||
+        !simResult.victimSolvedByExhaustion ||
+        simResult.victimCandidateCells != 1 ||
+        simResult.victimCandidateRooms != 1 ||
+        !simResult.domainSizes.values.every((c) => c == 1)) {
+      return false;
+    }
+
+    // Verify final positions exactly match Ground Truth
+    for (final s in caseData.suspects) {
+      if (simResult.finalPositions[s.id] != caseData.solution.suspectPositions[s.id]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   int _constraintPriority(SpatialConstraint c) {
@@ -303,6 +338,7 @@ class DeductionChainGenerator {
   }) {
     final list = <SpatialConstraint>[];
     final sol = caseData.solution.suspectPositions;
+    const evaluator = SpatialClueEvaluator();
 
     // 1. Zona
     final sZone = zoneMap[sPos];
@@ -314,86 +350,56 @@ class DeductionChainGenerator {
       ));
     }
 
-    // 2. Objetos
-    for (final po in caseData.placedObjects) {
-      final oPos = po.position;
-      final oId = po.object.id;
+      // 2. Relaciones con objetos
+      for (final relation in SpatialRelation.values) {
+        if (relation == SpatialRelation.inZone || relation == SpatialRelation.notInZone) {
+          continue;
+        }
 
-      // Inmediatos ortogonales (Máxima prioridad)
-      if (sPos.row == oPos.row - 1 && sPos.col == oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.immediatelyNorthOf, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.row == oPos.row + 1 && sPos.col == oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.immediatelySouthOf, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.row == oPos.row && sPos.col == oPos.col + 1) {
-        list.add(SpatialConstraint(relation: SpatialRelation.immediatelyEastOf, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.row == oPos.row && sPos.col == oPos.col - 1) {
-        list.add(SpatialConstraint(relation: SpatialRelation.immediatelyWestOf, targetId: oId, type: ClueType.cardinal));
-      }
+        for (final po in caseData.placedObjects) {
+          final oPos = po.position;
+          final oId = po.object.id;
+          if (evaluator.evaluate(suspectPosition: sPos, targetPosition: oPos, relation: relation)) {
+             list.add(SpatialConstraint(relation: relation, targetId: oId, type: _getTypeForRelation(relation)));
+          }
+        }
 
-      // Adyacencia
-      final dist = (sPos.row - oPos.row).abs() + (sPos.col - oPos.col).abs();
-      if (dist == 1) {
-        list.add(SpatialConstraint(relation: SpatialRelation.adjacentTo, targetId: oId, type: ClueType.adjacency));
+        // 3. Otros Sospechosos
+        for (final other in caseData.suspects) {
+          if (other.id == suspectId || other.id == caseData.victimId) continue;
+          final oPos = sol[other.id]!;
+          final oId = other.id;
+          if (evaluator.evaluate(suspectPosition: sPos, targetPosition: oPos, relation: relation)) {
+             list.add(SpatialConstraint(relation: relation, targetId: oId, type: _getTypeForRelation(relation)));
+          }
+        }
       }
-
-      // Co-localización
-      if (sPos.row == oPos.row) {
-        list.add(SpatialConstraint(relation: SpatialRelation.sameRow, targetId: oId, type: ClueType.coLocation));
-      }
-      if (sPos.col == oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.sameColumn, targetId: oId, type: ClueType.coLocation));
-      }
-
-      // Cardinales abiertas
-      if (sPos.row < oPos.row) {
-        list.add(SpatialConstraint(relation: SpatialRelation.above, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.row > oPos.row) {
-        list.add(SpatialConstraint(relation: SpatialRelation.below, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.col < oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.leftOf, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.col > oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.rightOf, targetId: oId, type: ClueType.cardinal));
-      }
-    }
-
-    // 3. Otros Sospechosos (excluyendo a la víctima para evitar pistas indirectas)
-    for (final other in caseData.suspects) {
-      if (other.id == suspectId || other.id == caseData.victimId) continue;
-      final oPos = sol[other.id]!;
-      final oId = other.id;
-
-      if (sPos.row == oPos.row) {
-        list.add(SpatialConstraint(relation: SpatialRelation.sameRow, targetId: oId, type: ClueType.coLocation));
-      }
-      if (sPos.col == oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.sameColumn, targetId: oId, type: ClueType.coLocation));
-      }
-
-      final dist = (sPos.row - oPos.row).abs() + (sPos.col - oPos.col).abs();
-      if (dist == 1) {
-        list.add(SpatialConstraint(relation: SpatialRelation.adjacentTo, targetId: oId, type: ClueType.adjacency));
-      }
-
-      if (sPos.row < oPos.row) {
-        list.add(SpatialConstraint(relation: SpatialRelation.above, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.row > oPos.row) {
-        list.add(SpatialConstraint(relation: SpatialRelation.below, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.col < oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.leftOf, targetId: oId, type: ClueType.cardinal));
-      }
-      if (sPos.col > oPos.col) {
-        list.add(SpatialConstraint(relation: SpatialRelation.rightOf, targetId: oId, type: ClueType.cardinal));
-      }
-    }
 
     return list;
+  }
+
+  ClueType _getTypeForRelation(SpatialRelation r) {
+    switch(r) {
+      case SpatialRelation.adjacentTo:
+      case SpatialRelation.notAdjacentTo:
+        return ClueType.adjacency;
+      case SpatialRelation.sameRow:
+      case SpatialRelation.sameColumn:
+      case SpatialRelation.differentRow:
+      case SpatialRelation.differentColumn:
+        return ClueType.coLocation;
+      case SpatialRelation.above:
+      case SpatialRelation.below:
+      case SpatialRelation.leftOf:
+      case SpatialRelation.rightOf:
+      case SpatialRelation.immediatelyNorthOf:
+      case SpatialRelation.immediatelySouthOf:
+      case SpatialRelation.immediatelyEastOf:
+      case SpatialRelation.immediatelyWestOf:
+        return ClueType.cardinal;
+      case SpatialRelation.inZone:
+      case SpatialRelation.notInZone:
+        return ClueType.zone;
+    }
   }
 }
