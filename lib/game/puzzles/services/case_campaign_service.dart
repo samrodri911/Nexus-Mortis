@@ -350,6 +350,7 @@ class CaseCampaignService {
       solution: result.caseData.solution,
       requiredCaseId: entity.requiredCaseId,
       origin: CaseOrigin.campaign,
+      zoneTheme: result.caseData.zoneTheme,
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:nexus_mortis/game/board/services/rug_placement_evaluator.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_theme.dart';
 
 /// Representa una arista indivisible de la cuadrícula entre dos celdas o en el borde del tablero.
 class RawGridEdge {
@@ -77,6 +79,7 @@ class ZoneGeometryResult {
     required this.cellHeight,
     required this.rows,
     required this.columns,
+    this.zoneRugRects = const {},
   });
 
   final List<RawGridEdge> rawInteriorEdges;
@@ -87,6 +90,7 @@ class ZoneGeometryResult {
   final Map<String, ui.Offset> zoneCentroids;
   final Map<String, ui.Offset> zoneVisualCenters;
   final Map<String, ui.Rect> zoneBoundingBoxes;
+  final Map<String, ui.Rect> zoneRugRects;
   final double cellWidth;
   final double cellHeight;
   final int rows;
@@ -110,6 +114,7 @@ class ZoneGeometryBuilder {
     required double boardWidth,
     required double boardHeight,
     Set<CellPosition> blockedCells = const {},
+    ZoneTheme? theme,
   }) {
     if (rows <= 0 || columns <= 0) {
       throw ArgumentError('Las filas y columnas deben ser mayores que cero.');
@@ -268,82 +273,82 @@ class ZoneGeometryBuilder {
       final availableCells = zone.cells.where((c) => !blockedCells.contains(c)).toList();
 
       if (availableCells.isNotEmpty) {
-        // 1. Generar puntos candidatos: centros de celdas libres y puntos medios entre celdas libres contiguas
-        final candidatePoints = <ui.Offset>[];
-
-        for (final cell in availableCells) {
-          candidatePoints.add(ui.Offset(
-            cell.col * cellW + (cellW / 2),
-            cell.row * cellH + (cellH / 2),
-          ));
+        // Baricentro de celdas libres
+        double sumFreeR = 0;
+        double sumFreeC = 0;
+        for (final c in availableCells) {
+          sumFreeR += c.row;
+          sumFreeC += c.col;
         }
+        final freeCentroid = ui.Offset(
+          (sumFreeC / availableCells.length + 0.5) * cellW,
+          (sumFreeR / availableCells.length + 0.5) * cellH,
+        );
 
-        // Si hay celdas libres adyacentes horizontal o verticalmente, evaluar el punto medio entre ambas
-        for (int i = 0; i < availableCells.length; i++) {
-          for (int j = i + 1; j < availableCells.length; j++) {
-            final c1 = availableCells[i];
-            final c2 = availableCells[j];
-            final isAdjacentH = (c1.row == c2.row) && ((c1.col - c2.col).abs() == 1);
-            final isAdjacentV = (c1.col == c2.col) && ((c1.row - c2.row).abs() == 1);
-            if (isAdjacentH || isAdjacentV) {
-              candidatePoints.add(ui.Offset(
-                (c1.col + c2.col + 1) * cellW / 2,
-                (c1.row + c2.row + 1) * cellH / 2,
-              ));
-            }
-          }
-        }
-
-        // 2. Evaluar cada punto candidato por holgura a paredes, distancia a muebles y proximidad al centro
-        ui.Offset bestPoint = candidatePoints.first;
+        CellPosition bestCell = availableCells.first;
         double bestScore = -double.infinity;
 
-        for (final pt in candidatePoints) {
-          // Distancia al centro ideal del bounding box
-          final distToCenter = ((pt.dx - idealCenter.dx) / cellW).abs() +
-              ((pt.dy - idealCenter.dy) / cellH).abs();
+        for (final cell in availableCells) {
+          final pt = ui.Offset(
+            cell.col * cellW + (cellW / 2),
+            cell.row * cellH + (cellH / 2),
+          );
 
-          // Medir holgura respecto a las celdas de la misma zona
-          int interiorNeighborhood = 0;
-          final cellCol = (pt.dx / cellW).floor();
-          final cellRow = (pt.dy / cellH).floor();
+          // Asegurar que el punto caiga estrictamente dentro del polígono de la habitación
+          if (!path.contains(pt)) continue;
 
-          final deltas = const [
-            [-1, 0], [1, 0], [0, -1], [0, 1],
-            [-1, -1], [-1, 1], [1, -1], [1, 1],
-          ];
-          for (final d in deltas) {
-            final nr = cellRow + d[0];
-            final nc = cellCol + d[1];
-            if (getZoneId(nr, nc) == zone.id) {
-              interiorNeighborhood++;
-            }
-          }
+          // 1. Distancia al baricentro de celdas libres
+          final distToFreeCentroid = sqrt(
+            pow((pt.dx - freeCentroid.dx) / cellW, 2) +
+            pow((pt.dy - freeCentroid.dy) / cellH, 2),
+          );
 
-          // Distancia mínima a cualquier celda bloqueada
+          // 2. Distancia al centro ideal del bounding box
+          final distToZoneCenter = sqrt(
+            pow((pt.dx - idealCenter.dx) / cellW, 2) +
+            pow((pt.dy - idealCenter.dy) / cellH, 2),
+          );
+
+          // 3. Distancia euclidiana mínima a cualquier celda bloqueada (mueble lógico)
           double minBlockedDist = 10.0;
           for (final b in blockedCells) {
-            final bx = b.col * cellW + (cellW / 2);
-            final by = b.row * cellH + (cellH / 2);
-            final d = sqrt(pow((pt.dx - bx) / cellW, 2) + pow((pt.dy - by) / cellH, 2));
+            final d = sqrt(pow(cell.col - b.col, 2) + pow(cell.row - b.row, 2));
             if (d < minBlockedDist) {
               minBlockedDist = d;
             }
           }
 
-          // Puntuación: mayor apertura interior + mayor distancia a muebles - penalización por lejanía al centro
-          final score = (interiorNeighborhood * 2.5) + (minBlockedDist * 3.0) - (distToCenter * 1.8);
+          // 4. Distancia a muros: medir vecinos en la misma zona
+          int sameZoneNeighbors = 0;
+          final deltas = const [
+            [-1, 0], [1, 0], [0, -1], [0, 1], // Ortogonales
+          ];
+          for (final d in deltas) {
+            if (getZoneId(cell.row + d[0], cell.col + d[1]) == zone.id) {
+              sameZoneNeighbors++;
+            }
+          }
+
+          // Puntuación de idoneidad:
+          // 1. Mayor distancia a muebles (+ minBlockedDist * 8.0)
+          // 2. Mayor distancia a muros (+ sameZoneNeighbors * 3.0)
+          // 3. Proximidad al baricentro libre (- distToFreeCentroid * 4.0)
+          // 4. Proximidad al centro general (- distToZoneCenter * 2.0)
+          final score = (minBlockedDist * 8.0) + (sameZoneNeighbors * 3.0) - (distToFreeCentroid * 4.0) - (distToZoneCenter * 2.0);
 
           if (score > bestScore) {
             bestScore = score;
-            bestPoint = pt;
+            bestCell = cell;
           }
         }
 
-        zoneVisualCenters[zone.id] = bestPoint;
+        zoneVisualCenters[zone.id] = ui.Offset(
+          bestCell.col * cellW + (cellW / 2),
+          bestCell.row * cellH + (cellH / 2),
+        );
       } else {
-        // Todas las celdas de la habitación contienen muebles (caso excepcional)
-        // Seleccionar la celda más céntrica y desplazar el punto al margen superior libre
+        // Todas las celdas de la habitación contienen muebles (caso excepcional / 1 celda ocupada)
+        // Seleccionar la celda más céntrica y posicionar el texto en el margen superior libre
         CellPosition mostCentral = zone.cells.first;
         double minDist = double.infinity;
         for (final cell in zone.cells) {
@@ -358,10 +363,22 @@ class ZoneGeometryBuilder {
 
         zoneVisualCenters[zone.id] = ui.Offset(
           mostCentral.col * cellW + (cellW / 2),
-          mostCentral.row * cellH + (cellH * 0.22),
+          mostCentral.row * cellH + (cellH * 0.16),
         );
       }
     }
+
+    // 6. Evaluación geométrica estricta de alfombras
+    final rugEvaluator = const RugPlacementEvaluator();
+    final zoneRugRects = rugEvaluator.evaluate(
+      rows: rows,
+      columns: columns,
+      cellWidth: cellW,
+      cellHeight: cellH,
+      zones: zones,
+      blockedCells: blockedCells,
+      theme: theme,
+    );
 
     return ZoneGeometryResult(
       rawInteriorEdges: rawInteriorEdges,
@@ -372,6 +389,7 @@ class ZoneGeometryBuilder {
       zoneCentroids: zoneCentroids,
       zoneVisualCenters: zoneVisualCenters,
       zoneBoundingBoxes: zoneBoundingBoxes,
+      zoneRugRects: zoneRugRects,
       cellWidth: cellW,
       cellHeight: cellH,
       rows: rows,

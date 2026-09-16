@@ -25,15 +25,15 @@ class CellComponent extends PositionComponent with TapCallbacks {
     this.objectLabel,
     required super.position,
     required super.size,
-  });
+  }) {
+    priority = 30;
+  }
 
   final CellData cellData;
   final void Function(int row, int col) onTapped;
   final String? Function() getActiveSuspectId;
   final List<SuspectData> allSuspects;
   final String? objectLabel;
-
-  static const _furnitureRenderer = ArchitecturalFurnitureRenderer();
 
   // Jerarquía visual sobre plano claro arquitectónico
   // Manual X: rojo carmín nítido
@@ -60,16 +60,8 @@ class CellComponent extends PositionComponent with TapCallbacks {
     final w = size.x;
     final h = size.y;
 
-    // 1. Celdas Bloqueadas (Objetos lógicos del puzzle)
-    // Se renderizan directamente sobre la textura del suelo de la habitación
+    // 1. Celdas Bloqueadas (Mobiliario arquitectónico delegado a FurnitureLayerComponent en Priority 10)
     if (cellData.isBlocked) {
-      _furnitureRenderer.render(
-        canvas: canvas,
-        objectId: cellData.objectId ?? '',
-        objectLabel: objectLabel,
-        cellRect: ui.Rect.fromLTWH(0, 0, w, h),
-        tileSize: min(w, h),
-      );
       return;
     }
 

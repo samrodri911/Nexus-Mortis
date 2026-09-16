@@ -1,15 +1,24 @@
 import 'package:flame/components.dart';
 import 'package:nexus_mortis/game/board/components/cell_component.dart';
 import 'package:nexus_mortis/game/board/components/floor_plan_component.dart';
+import 'package:nexus_mortis/game/board/components/furniture_layer_component.dart';
+import 'package:nexus_mortis/game/board/components/walls_overlay_component.dart';
 import 'package:nexus_mortis/game/board/controllers/board_controller.dart';
 import 'package:nexus_mortis/game/board/services/board_layout_metrics.dart';
+import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
+import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 
 /// Componente raíz del tablero espacial.
 ///
 /// Responsabilidades:
-/// - Garantizar que cada celda sea un cuadrado perfecto (`tileWidth == tileHeight == tileSize`).
+/// - Garantizar que cada celda sea un cuadrado perfecto (	ileWidth == tileHeight == tileSize).
 /// - Centrar perfectamente el tablero en el área visible disponible.
 /// - Adaptar dinámicamente el tamaño de celdas cuando el viewport se expande o contrae.
+/// - Orquestar la jerarquía estricta de capas visuales:
+///   1. [FloorPlanComponent] (Priority 0): Suelo, alfombras, ambientación y nombres de zonas.
+///   2. [FurnitureLayerComponent] (Priority 10): Mobiliario 2.5D con sombras proyectadas.
+///   3. [WallsOverlayComponent] (Priority 20): Muros continuos dominantes (5-6px).
+///   4. [CellComponent]s (Priority 30): Marcas de interacción del jugador (✓, X, candidatos, confirmaciones).
 class BoardComponent extends Component {
   BoardComponent({
     required this.controller,
@@ -19,9 +28,14 @@ class BoardComponent extends Component {
   final BoardController controller;
   Vector2 boardSize;
 
+  static const _geometryBuilder = ZoneGeometryBuilder();
+
   late FloorPlanComponent _floorPlanComponent;
+  late FurnitureLayerComponent _furnitureLayerComponent;
+  late WallsOverlayComponent _wallsOverlayComponent;
   final List<List<CellComponent>> _cellComponents = [];
   late BoardLayoutMetrics _metrics;
+  late ZoneGeometryResult _geometry;
 
   @override
   Future<void> onLoad() async {
@@ -35,15 +49,32 @@ class BoardComponent extends Component {
       cols: cols,
     );
 
-    // 1. Agregar el plano arquitectónico continuo (suelos, muros, ambientación)
+    _geometry = _calculateGeometry(_metrics, rows, cols);
+
+    // 1. Capa 0: Plano arquitectónico continuo (suelos, alfombras, ambientación, nombres)
     _floorPlanComponent = FloorPlanComponent(
       controller: controller,
+      geometry: _geometry,
       size: Vector2(_metrics.boardWidth, _metrics.boardHeight),
     )..position = Vector2(_metrics.offsetX, _metrics.offsetY);
-
     await add(_floorPlanComponent);
 
-    // 2. Agregar celdas interactivas perfectamente cuadradas y centradas
+    // 2. Capa 10: Mobiliario arquitectónico 2.5D y sombras
+    _furnitureLayerComponent = FurnitureLayerComponent(
+      controller: controller,
+      metrics: _metrics,
+      size: Vector2(_metrics.boardWidth, _metrics.boardHeight),
+    )..position = Vector2(_metrics.offsetX, _metrics.offsetY);
+    await add(_furnitureLayerComponent);
+
+    // 3. Capa 20: Muros continuos dominantes (línea arquitectónica limpia)
+    _wallsOverlayComponent = WallsOverlayComponent(
+      geometry: _geometry,
+      size: Vector2(_metrics.boardWidth, _metrics.boardHeight),
+    )..position = Vector2(_metrics.offsetX, _metrics.offsetY);
+    await add(_wallsOverlayComponent);
+
+    // 4. Capa 30: Celdas interactivas (marcas de gameplay, candidatos, confirmaciones)
     for (var r = 0; r < rows; r++) {
       final rowList = <CellComponent>[];
       for (var c = 0; c < cols; c++) {
@@ -84,11 +115,24 @@ class BoardComponent extends Component {
       cols: cols,
     );
 
-    // Actualizar FloorPlanComponent
-    _floorPlanComponent.position = Vector2(_metrics.offsetX, _metrics.offsetY);
-    _floorPlanComponent.updateBoardSize(Vector2(_metrics.boardWidth, _metrics.boardHeight));
+    _geometry = _calculateGeometry(_metrics, rows, cols);
 
-    // Actualizar cada CellComponent
+    final boardDim = Vector2(_metrics.boardWidth, _metrics.boardHeight);
+    final boardOffset = Vector2(_metrics.offsetX, _metrics.offsetY);
+
+    // Actualizar FloorPlanComponent (Priority 0)
+    _floorPlanComponent.position = boardOffset;
+    _floorPlanComponent.updateGeometry(_geometry, boardDim);
+
+    // Actualizar FurnitureLayerComponent (Priority 10)
+    _furnitureLayerComponent.position = boardOffset;
+    _furnitureLayerComponent.updateMetrics(_metrics, boardDim);
+
+    // Actualizar WallsOverlayComponent (Priority 20)
+    _wallsOverlayComponent.position = boardOffset;
+    _wallsOverlayComponent.updateGeometry(_geometry, boardDim);
+
+    // Actualizar cada CellComponent (Priority 30)
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         if (r < _cellComponents.length && c < _cellComponents[r].length) {
@@ -98,6 +142,27 @@ class BoardComponent extends Component {
         }
       }
     }
+  }
+
+  ZoneGeometryResult _calculateGeometry(BoardLayoutMetrics metrics, int rows, int cols) {
+    final blocked = <CellPosition>{};
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        if (controller.cells[r][c].isBlocked) {
+          blocked.add(CellPosition(r, c));
+        }
+      }
+    }
+
+    return _geometryBuilder.build(
+      rows: rows,
+      columns: cols,
+      zones: controller.zones,
+      boardWidth: metrics.boardWidth,
+      boardHeight: metrics.boardHeight,
+      blockedCells: blocked,
+      theme: controller.zoneTheme,
+    );
   }
 
   void _onCellTapped(int row, int col) {

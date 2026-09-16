@@ -9,6 +9,7 @@ import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_theme.dart';
 
 /// Mapper de serialización y deserialización fiel e inmutable para CaseData.
 class CaseDataMapper {
@@ -49,6 +50,7 @@ class CaseDataMapper {
       },
       'requiredCaseId': data.requiredCaseId,
       'origin': data.origin.name,
+      'zoneTheme': data.zoneTheme?.name,
     };
   }
 
@@ -122,6 +124,14 @@ class CaseDataMapper {
       return MapEntry(key, CellPosition(pMap['row'] as int, pMap['col'] as int));
     });
 
+    final zoneThemeName = json['zoneTheme'] as String?;
+    final zoneTheme = zoneThemeName != null
+        ? ZoneTheme.values.firstWhere(
+            (e) => e.name == zoneThemeName,
+            orElse: () => ZoneTheme.classicMansion,
+          )
+        : null;
+
     return CaseData(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -139,6 +149,7 @@ class CaseDataMapper {
       solution: SolutionData(suspectPositions: suspectPositions),
       requiredCaseId: json['requiredCaseId'] as String?,
       origin: origin,
+      zoneTheme: zoneTheme,
     );
   }
 }

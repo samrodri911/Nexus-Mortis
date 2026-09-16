@@ -8,6 +8,7 @@ import 'package:flutter/material.dart'
         Offset,
         Paint,
         PaintingStyle,
+        Path,
         Radius,
         Rect,
         RRect;
@@ -34,6 +35,17 @@ class ArchitecturalFurnitureRenderer {
   static const _metalAccent = Color(0xFF54504B);
   static const _metalHighlight = Color(0xFF88847E);
   static const _brassAccent = Color(0xFFC4A45A);
+
+  // Paleta botánica y elementos especiales
+  static const _leafGreenDark = Color(0xFF386341);
+  static const _leafGreenMid = Color(0xFF4A8553);
+  static const _leafGreenLight = Color(0xFF67A971);
+  static const _potTerracotta = Color(0xFFC46A49);
+  static const _potSoil = Color(0xFF3B2A1E);
+  static const _waterBlue = Color(0xFF459DB3);
+  static const _waterRipple = Color(0xFF8CD4E6);
+  static const _marbleLight = Color(0xFFF2EEE8);
+  static const _marbleShadow = Color(0xFFD8D2C7);
 
   void render({
     required Canvas canvas,
@@ -64,10 +76,12 @@ class ArchitecturalFurnitureRenderer {
 
     canvas.save();
     canvas.translate(cellRect.left, cellRect.top);
+    // Salvaguarda visual: garantizar que ningún trazo sobrepase la celda física
+    canvas.clipRect(Rect.fromLTWH(0, 0, tileSize, tileSize));
 
     if (lowerId.contains('cama') || lowerId.contains('bed')) {
       _renderBed(canvas, tileSize, outlinePaint, detailPaint);
-    } else if (lowerId.contains('silla') || lowerId.contains('chair')) {
+    } else if (lowerId.contains('silla') || lowerId.contains('chair') || lowerId.contains('sillon') || lowerId.contains('sillón')) {
       _renderChair(canvas, tileSize, outlinePaint, detailPaint);
     } else if (lowerId.contains('mesa') && !lowerId.contains('noche')) {
       _renderTable(canvas, tileSize, outlinePaint, detailPaint);
@@ -77,6 +91,14 @@ class ArchitecturalFurnitureRenderer {
       _renderBookshelf(canvas, tileSize, outlinePaint, detailPaint);
     } else if (lowerId.contains('armario') || lowerId.contains('wardrobe') || lowerId.contains('closet')) {
       _renderWardrobe(canvas, tileSize, outlinePaint, detailPaint);
+    } else if (lowerId.contains('maceta') || lowerId.contains('planta') || lowerId.contains('plant') || lowerId.contains('pot')) {
+      _renderPlant(canvas, tileSize, outlinePaint, detailPaint);
+    } else if (lowerId.contains('reloj') || lowerId.contains('clock')) {
+      _renderClock(canvas, tileSize, outlinePaint, detailPaint);
+    } else if (lowerId.contains('fuente') || lowerId.contains('fountain')) {
+      _renderFountain(canvas, tileSize, outlinePaint, detailPaint);
+    } else if (lowerId.contains('estatua') || lowerId.contains('statue')) {
+      _renderStatue(canvas, tileSize, outlinePaint, detailPaint);
     } else if (lowerId.contains('lampara') || lowerId.contains('lámpara') || lowerId.contains('lamp')) {
       _renderLamp(canvas, tileSize, outlinePaint, detailPaint);
     } else if (lowerId.contains('caja') || lowerId.contains('baul') || lowerId.contains('baúl') || lowerId.contains('chest')) {
@@ -109,13 +131,13 @@ class ArchitecturalFurnitureRenderer {
 
   /// Cama top-down 2.5D: cabecero con relieve, dos almohadas tridimensionales y edredón doblado.
   void _renderBed(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.70;
-    final h = size * 0.82;
+    final w = size * 0.66;
+    final h = size * 0.72;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
     // 1. Sombra elíptica arrojada bajo la base de la cama
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.06), w * 0.96, h * 0.26);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Cabecero de madera en la parte superior (con efecto 2.5D)
     final headboardH = h * 0.13;
@@ -124,7 +146,6 @@ class ArchitecturalFurnitureRenderer {
       RRect.fromRectAndRadius(headboardRect, const Radius.circular(2.5)),
       Paint()..color = _woodDark,
     );
-    // Veta / highlight superior de la madera
     canvas.drawLine(
       Offset(x + 2, y + 1.2),
       Offset(x + w - 2, y + 1.2),
@@ -141,7 +162,6 @@ class ArchitecturalFurnitureRenderer {
       RRect.fromRectAndRadius(mattressRect, const Radius.circular(3.5)),
       Paint()..color = _linenLight,
     );
-    // Sombra en el canto derecho e inferior del colchón
     canvas.drawRRect(
       RRect.fromRectAndRadius(mattressRect, const Radius.circular(3.5)),
       outlinePaint,
@@ -157,14 +177,11 @@ class ArchitecturalFurnitureRenderer {
       final pRect = Rect.fromLTWH(px, pillowY, pillowW, pillowH);
       final rrect = RRect.fromRectAndRadius(pRect, const Radius.circular(2.5));
 
-      // Sombra propia de la almohada
       canvas.drawRRect(
         rrect.shift(const Offset(0, 1.2)),
         Paint()..color = const Color(0x18000000),
       );
-      // Relleno blanco lino
       canvas.drawRRect(rrect, Paint()..color = const Color(0xFFFFFFFD));
-      // Contorno suave de la almohada
       canvas.drawRRect(rrect, detailPaint);
     }
 
@@ -176,12 +193,10 @@ class ArchitecturalFurnitureRenderer {
       final duvetRRect = RRect.fromRectAndRadius(duvetRect, const Radius.circular(3.0));
 
       canvas.drawRRect(duvetRRect, Paint()..color = _linenFold);
-      // Sombra inferior del embozo
       canvas.drawRect(
         Rect.fromLTWH(x + 2, duvetY, w - 4, 3.0),
         Paint()..color = _linenShadow,
       );
-      // Línea de embozo / pliegue de la sábana
       canvas.drawLine(
         Offset(x + 1.5, duvetY),
         Offset(x + w - 1.5, duvetY),
@@ -190,49 +205,66 @@ class ArchitecturalFurnitureRenderer {
     }
   }
 
-  /// Silla / sillón top-down 2.5D: asiento acolchado con respaldo envolvente curvado.
+  /// Silla / sillón top-down 2.5D: cojín central, apoyabrazos laterales y respaldo envolvente.
   void _renderChair(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final s = size * 0.65;
+    final s = size * 0.64;
     final x = (size - s) / 2;
     final y = (size - s) / 2;
 
-    // 1. Sombra elíptica arrojada bajo la silla
-    _drawDepthShadow(canvas, size / 2, y + s - (s * 0.05), s * 0.92, s * 0.30);
+    // 1. Sombra elíptica arrojada bajo el sillón
+    _drawDepthShadow(canvas, size / 2, y + s - (s * 0.04), s * 0.90, s * 0.22);
 
-    // 2. Asiento acolchado
-    final seatRect = Rect.fromLTWH(x + 3.5, y + 6.5, s - 7, s - 9);
-    final seatRRect = RRect.fromRectAndRadius(seatRect, const Radius.circular(4.5));
+    // 2. Respaldo curvado exterior (cascarón de madera oscura envolvente)
+    final backRect = Rect.fromLTWH(x, y, s, s * 0.88);
+    final backRRect = RRect.fromRectAndRadius(backRect, Radius.circular(s * 0.35));
+    canvas.drawRRect(backRRect, Paint()..color = _woodDark);
+    canvas.drawRRect(backRRect, outlinePaint);
 
-    canvas.drawRRect(seatRRect, Paint()..color = _linenFold);
-    // Sombra interior de profundidad en el asiento
-    canvas.drawRRect(
-      seatRRect.deflate(2.0),
-      Paint()..color = _linenShadow.withAlpha(120),
+    // 3. Cojín central acolchado con volumen y sombra de separación
+    final cushionW = s * 0.58;
+    final cushionH = s * 0.52;
+    final cushionRect = Rect.fromCenter(
+      center: Offset(size / 2, y + s * 0.50),
+      width: cushionW,
+      height: cushionH,
     );
-    canvas.drawRRect(seatRRect, detailPaint);
+    final cushionRRect = RRect.fromRectAndRadius(cushionRect, const Radius.circular(4.0));
 
-    // 3. Respaldo curvado superior y brazos envolventes (estilo cómic con trazo grueso)
-    final backPath = ui.Path();
-    backPath.moveTo(x + 1.5, y + s * 0.68);
-    backPath.lineTo(x + 1.5, y + 5);
-    backPath.quadraticBezierTo(size / 2, y - 2.5, x + s - 1.5, y + 5);
-    backPath.lineTo(x + s - 1.5, y + s * 0.68);
+    // Sombra interna del cojín
+    canvas.drawRRect(
+      cushionRRect.shift(const Offset(0, 1.5)),
+      Paint()..color = const Color(0x35000000),
+    );
+    // Superficie del cojín
+    canvas.drawRRect(cushionRRect, Paint()..color = _linenLight);
+    // Volumen sutil del asiento
+    canvas.drawRRect(
+      cushionRRect.deflate(2.0),
+      Paint()..color = _linenFold,
+    );
+    canvas.drawRRect(cushionRRect, detailPaint);
 
-    final backPaint = Paint()
-      ..color = _woodDark
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = max(2.8, size * 0.065)
-      ..strokeCap = ui.StrokeCap.round
-      ..strokeJoin = ui.StrokeJoin.round;
+    // 4. Apoyabrazos laterales visibles desde arriba
+    final armW = s * 0.16;
+    final armH = s * 0.44;
+    final armY = y + s * 0.28;
 
-    canvas.drawPath(backPath, backPaint);
-    canvas.drawPath(backPath, outlinePaint);
+    final leftArm = Rect.fromLTWH(x + 1.5, armY, armW, armH);
+    final rightArm = Rect.fromLTWH(x + s - armW - 1.5, armY, armW, armH);
+
+    final leftArmRRect = RRect.fromRectAndRadius(leftArm, const Radius.circular(3.0));
+    final rightArmRRect = RRect.fromRectAndRadius(rightArm, const Radius.circular(3.0));
+
+    canvas.drawRRect(leftArmRRect, Paint()..color = _woodMedium);
+    canvas.drawRRect(rightArmRRect, Paint()..color = _woodMedium);
+    canvas.drawRRect(leftArmRRect, detailPaint);
+    canvas.drawRRect(rightArmRRect, detailPaint);
   }
 
   /// Mesa de comedor / reuniones: tablero biselado 2.5D con highlight y sombra.
   void _renderTable(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.74;
-    final h = size * 0.70;
+    final w = size * 0.68;
+    final h = size * 0.64;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -240,7 +272,7 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(tableRect, const Radius.circular(6.0));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.06), w * 0.96, h * 0.28);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Base / canto inferior 2.5D
     final edgeRect = Rect.fromLTWH(x, y + 2.0, w, h);
@@ -262,14 +294,14 @@ class ArchitecturalFurnitureRenderer {
         ..strokeWidth = detailPaint.strokeWidth,
     );
 
-    // 5. Pequeño detalle: veta central o centro pulido
+    // 5. Centro pulido de latón
     canvas.drawCircle(tableRect.center, 3.0, Paint()..color = _brassAccent.withAlpha(150));
   }
 
   /// Escritorio de detective: mesa de trabajo con tapete de cuero, cajoneras y dossier.
   void _renderDesk(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.78;
-    final h = size * 0.66;
+    final w = size * 0.72;
+    final h = size * 0.60;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -277,11 +309,11 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(deskRect, const Radius.circular(3.5));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.98, h * 0.26);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
-    // 2. Canto 2.5D inferior
+    // 2. Canto 2.5D inferior para sensación de grosor
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(x, y + 2.0, w, h), const Radius.circular(3.5)),
+      RRect.fromRectAndRadius(Rect.fromLTWH(x, y + 2.2, w, h), const Radius.circular(3.5)),
       Paint()..color = _woodDark,
     );
 
@@ -289,9 +321,19 @@ class ArchitecturalFurnitureRenderer {
     canvas.drawRRect(rrect, Paint()..color = _woodMedium);
     canvas.drawRRect(rrect, outlinePaint);
 
-    // 4. Tapete de cuero de investigación en el centro
-    final padW = w * 0.52;
-    final padH = h * 0.62;
+    // 4. Líneas divisorias de cajoneras laterales con tiradores de latón
+    final drawerOffset = w * 0.20;
+    canvas.drawLine(Offset(x + drawerOffset, y), Offset(x + drawerOffset, y + h), detailPaint);
+    canvas.drawLine(Offset(x + w - drawerOffset, y), Offset(x + w - drawerOffset, y + h), detailPaint);
+
+    final leftHandle = Offset(x + drawerOffset / 2, deskRect.center.dy);
+    final rightHandle = Offset(x + w - (drawerOffset / 2), deskRect.center.dy);
+    canvas.drawCircle(leftHandle, 1.5, Paint()..color = _brassAccent);
+    canvas.drawCircle(rightHandle, 1.5, Paint()..color = _brassAccent);
+
+    // 5. Tapete de cuero de investigación en el centro
+    final padW = w * 0.48;
+    final padH = h * 0.65;
     final padRect = Rect.fromCenter(center: deskRect.center, width: padW, height: padH);
     canvas.drawRRect(
       RRect.fromRectAndRadius(padRect, const Radius.circular(2.0)),
@@ -302,33 +344,217 @@ class ArchitecturalFurnitureRenderer {
       detailPaint,
     );
 
-    // 5. Documento / hoja de detective sobre el tapete
-    final docRect = Rect.fromLTWH(padRect.left + 3.0, padRect.top + 3.0, padW * 0.38, padH * 0.55);
+    // 6. Hoja / dossier de caso sobre el tapete
+    final docRect = Rect.fromLTWH(padRect.left + 3.0, padRect.top + 3.0, padW * 0.42, padH * 0.58);
     canvas.drawRect(docRect, Paint()..color = const Color(0xFFF9F7F1));
     canvas.drawRect(docRect, detailPaint);
+  }
 
-    // 6. Líneas divisorias de cajoneras laterales con tiradores de latón
-    final drawerOffset = w * 0.18;
-    canvas.drawLine(Offset(x + drawerOffset, y), Offset(x + drawerOffset, y + h), detailPaint);
-    canvas.drawLine(Offset(x + w - drawerOffset, y), Offset(x + w - drawerOffset, y + h), detailPaint);
+  /// Planta / maceta top-down 2.5D: maceta terracota con tierra visible y hojas verdes en abanico.
+  void _renderPlant(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final potRadius = size * 0.23;
 
-    final leftHandle = Offset(x + drawerOffset / 2, deskRect.center.dy);
-    final rightHandle = Offset(x + w - (drawerOffset / 2), deskRect.center.dy);
-    canvas.drawCircle(leftHandle, 1.4, Paint()..color = _brassAccent);
-    canvas.drawCircle(rightHandle, 1.4, Paint()..color = _brassAccent);
+    // 1. Sombra elíptica arrojada bajo la maceta
+    _drawDepthShadow(canvas, cx, cy + potRadius * 0.35, potRadius * 2.2, potRadius * 0.80);
+
+    // 2. Borde exterior de la maceta de terracota
+    canvas.drawCircle(Offset(cx, cy), potRadius, Paint()..color = _potTerracotta);
+    canvas.drawCircle(Offset(cx, cy), potRadius, outlinePaint);
+
+    // 3. Tierra oscura de cultivo visible en el interior
+    final soilRadius = potRadius * 0.72;
+    canvas.drawCircle(Offset(cx, cy), soilRadius, Paint()..color = _potSoil);
+    canvas.drawCircle(Offset(cx, cy), soilRadius, detailPaint);
+
+    // 4. Hojas verdes estilizadas que sobresalen en distintas direcciones
+    final leafAngles = [
+      -pi / 4,
+      pi / 4,
+      3 * pi / 4,
+      -3 * pi / 4,
+      -pi / 2,
+      pi / 2,
+    ];
+
+    final leafLen = size * 0.28;
+    final leafWidth = size * 0.09;
+
+    for (int i = 0; i < leafAngles.length; i++) {
+      final angle = leafAngles[i];
+      final cosA = cos(angle);
+      final sinA = sin(angle);
+
+      // Eje de la hoja
+      final tipX = cx + cosA * leafLen;
+      final tipY = cy + sinA * leafLen;
+
+      final normX = -sinA * leafWidth;
+      final normY = cosA * leafWidth;
+
+      final leafPath = Path()
+        ..moveTo(cx + cosA * (soilRadius * 0.5), cy + sinA * (soilRadius * 0.5))
+        ..quadraticBezierTo(
+          cx + cosA * (leafLen * 0.55) + normX,
+          cy + sinA * (leafLen * 0.55) + normY,
+          tipX,
+          tipY,
+        )
+        ..quadraticBezierTo(
+          cx + cosA * (leafLen * 0.55) - normX,
+          cy + sinA * (leafLen * 0.55) - normY,
+          cx + cosA * (soilRadius * 0.5),
+          cy + sinA * (soilRadius * 0.5),
+        );
+
+      // Color alternado para volumen
+      final leafColor = (i % 2 == 0) ? _leafGreenMid : _leafGreenLight;
+      canvas.drawPath(leafPath, Paint()..color = leafColor);
+      canvas.drawPath(leafPath, outlinePaint);
+
+      // Nervadura central sutil
+      canvas.drawLine(
+        Offset(cx, cy),
+        Offset(tipX, tipY),
+        detailPaint,
+      );
+    }
+
+    // 5. Brote central
+    canvas.drawCircle(Offset(cx, cy), 3.0, Paint()..color = _leafGreenDark);
+    canvas.drawCircle(Offset(cx, cy), 3.0, detailPaint);
+  }
+
+  /// Reloj de pie antiguo top-down: mueble de madera noble con esfera de reloj y agujas.
+  void _renderClock(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
+    final w = size * 0.50;
+    final h = size * 0.66;
+    final x = (size - w) / 2;
+    final y = (size - h) / 2;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
+
+    // 2. Mueble de madera noble
+    final bodyRect = Rect.fromLTWH(x, y, w, h);
+    final bodyRRect = RRect.fromRectAndRadius(bodyRect, const Radius.circular(4.0));
+    canvas.drawRRect(bodyRRect, Paint()..color = _woodDark);
+    canvas.drawRRect(bodyRRect, outlinePaint);
+
+    // 3. Cornisa superior de remate
+    final corniceRect = Rect.fromLTWH(x - 1.5, y, w + 3.0, h * 0.16);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(corniceRect, const Radius.circular(2.0)),
+      Paint()..color = _woodMedium,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(corniceRect, const Radius.circular(2.0)),
+      detailPaint,
+    );
+
+    // 4. Esfera circular del reloj con bisel de latón
+    final dialRadius = min(w * 0.36, h * 0.28);
+    final dialCenter = Offset(size / 2, y + h * 0.54);
+
+    canvas.drawCircle(dialCenter, dialRadius + 1.5, Paint()..color = _brassAccent);
+    canvas.drawCircle(dialCenter, dialRadius, Paint()..color = const Color(0xFFFFFDE7));
+    canvas.drawCircle(dialCenter, dialRadius, detailPaint);
+
+    // Manecillas del reloj marcando las 10:10
+    canvas.drawLine(
+      dialCenter,
+      Offset(dialCenter.dx - dialRadius * 0.50, dialCenter.dy - dialRadius * 0.50),
+      Paint()..color = _outlineColor..strokeWidth = 1.4..strokeCap = ui.StrokeCap.round,
+    );
+    canvas.drawLine(
+      dialCenter,
+      Offset(dialCenter.dx + dialRadius * 0.55, dialCenter.dy - dialRadius * 0.35),
+      Paint()..color = _outlineColor..strokeWidth = 1.2..strokeCap = ui.StrokeCap.round,
+    );
+    canvas.drawCircle(dialCenter, 1.2, Paint()..color = _outlineColor);
+  }
+
+  /// Fuente ornamental de jardín: pilón circular de piedra con agua y ondas.
+  void _renderFountain(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final basinRadius = size * 0.32;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + basinRadius * 0.30, basinRadius * 2.1, basinRadius * 0.80);
+
+    // 2. Brocal de piedra
+    canvas.drawCircle(Offset(cx, cy), basinRadius, Paint()..color = const Color(0xFFD3CCC3));
+    canvas.drawCircle(Offset(cx, cy), basinRadius, outlinePaint);
+
+    // 3. Poza de agua
+    final waterRadius = basinRadius * 0.80;
+    canvas.drawCircle(Offset(cx, cy), waterRadius, Paint()..color = _waterBlue);
+
+    // 4. Ondas concéntricas de agua
+    canvas.drawCircle(
+      Offset(cx, cy),
+      waterRadius * 0.55,
+      Paint()..color = _waterRipple..style = PaintingStyle.stroke..strokeWidth = 1.0,
+    );
+
+    // 5. Surtidor central
+    canvas.drawCircle(Offset(cx, cy), basinRadius * 0.22, Paint()..color = const Color(0xFFB5ADA3));
+    canvas.drawCircle(Offset(cx, cy), basinRadius * 0.22, detailPaint);
+    canvas.drawCircle(Offset(cx, cy), 2.0, Paint()..color = const Color(0xFFFFFFFF));
+  }
+
+  /// Estatua / busto sobre pedestal: pedestal de mármol con busto esculpido estrictamente centrado.
+  void _renderStatue(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
+    final s = size * 0.60;
+    final cx = size / 2;
+    final cy = size / 2;
+
+    // 1. Pedestal de mármol centrado
+    final plinthRect = Rect.fromCenter(center: Offset(cx, cy), width: s, height: s * 0.80);
+    final plinthRRect = RRect.fromRectAndRadius(plinthRect, const Radius.circular(4.0));
+
+    // Sombra arrojada bajo la base del pedestal
+    _drawDepthShadow(canvas, cx, plinthRect.bottom - (s * 0.04), s * 0.92, s * 0.22);
+
+    canvas.drawRRect(plinthRRect, Paint()..color = _marbleShadow);
+    canvas.drawRRect(plinthRRect, outlinePaint);
+
+    // Plinto superior biselado centrado
+    final topRect = Rect.fromCenter(center: Offset(cx, cy), width: s - 4, height: s * 0.74);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(topRect, const Radius.circular(2.5)),
+      Paint()..color = _marbleLight,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(topRect, const Radius.circular(2.5)),
+      detailPaint,
+    );
+
+    // 2. Busto clásico esculpido top-down centrado
+    final bustCenter = Offset(cx, cy);
+    // Hombros
+    final shoulders = Rect.fromCenter(center: bustCenter, width: s * 0.62, height: s * 0.30);
+    canvas.drawOval(shoulders, Paint()..color = const Color(0xFFEBE5DB));
+    canvas.drawOval(shoulders, outlinePaint);
+
+    // Cabeza esculpida
+    canvas.drawCircle(bustCenter, s * 0.17, Paint()..color = const Color(0xFFFAF7F2));
+    canvas.drawCircle(bustCenter, s * 0.17, outlinePaint);
   }
 
   /// Librero / estantería: baldas de madera con lomos de libros multicolores sobrios.
   void _renderBookshelf(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.80;
-    final h = size * 0.64;
+    final w = size * 0.72;
+    final h = size * 0.58;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
     final shelfRect = Rect.fromLTWH(x, y, w, h);
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.98, h * 0.25);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Estructura exterior de roble oscuro
     canvas.drawRRect(
@@ -376,8 +602,8 @@ class ArchitecturalFurnitureRenderer {
 
   /// Armario / ropero: moldura superior biselada, puertas con bisagras y tiradores.
   void _renderWardrobe(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.78;
-    final h = size * 0.70;
+    final w = size * 0.70;
+    final h = size * 0.64;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -385,7 +611,7 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(wardRect, const Radius.circular(2.5));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.98, h * 0.26);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Madera del cuerpo
     canvas.drawRRect(rrect, Paint()..color = _woodMedium);
@@ -426,19 +652,19 @@ class ArchitecturalFurnitureRenderer {
   void _renderLamp(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
     final cx = size / 2;
     final cy = size / 2;
-    final r = size * 0.30;
+    final r = size * 0.25;
 
     // 1. Halo cálido sutil de luz
     canvas.drawCircle(
       Offset(cx, cy),
-      r * 1.35,
+      r * 1.25,
       Paint()
         ..color = const Color(0xFFFFD54F).withAlpha(38)
         ..style = PaintingStyle.fill,
     );
 
     // 2. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, cx, cy + r * 0.70, r * 2.0, r * 0.70);
+    _drawDepthShadow(canvas, cx, cy + r * 0.60, r * 1.8, r * 0.60);
 
     // 3. Pantalla circular cónica top-down
     canvas.drawCircle(Offset(cx, cy), r, Paint()..color = _linenLight);
@@ -454,8 +680,8 @@ class ArchitecturalFurnitureRenderer {
 
   /// Baúl / caja fuerte: cofre acorazado con esquineras de metal, remaches y cerradura.
   void _renderChest(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.70;
-    final h = size * 0.60;
+    final w = size * 0.66;
+    final h = size * 0.54;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -463,7 +689,7 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(chestRect, const Radius.circular(2.5));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.94, h * 0.28);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Madera maciza
     canvas.drawRRect(rrect, Paint()..color = _woodMedium);
@@ -474,7 +700,7 @@ class ArchitecturalFurnitureRenderer {
     canvas.drawLine(Offset(x, slatY), Offset(x + w, slatY), detailPaint);
 
     // 4. Refuerzos en las 4 esquinas con metal
-    final cornerSize = 4.8;
+    final cornerSize = 4.5;
     final cornerPaint = Paint()..color = _metalAccent;
     canvas.drawRect(Rect.fromLTWH(x, y, cornerSize, cornerSize), cornerPaint);
     canvas.drawRect(Rect.fromLTWH(x + w - cornerSize, y, cornerSize, cornerSize), cornerPaint);
@@ -489,8 +715,8 @@ class ArchitecturalFurnitureRenderer {
 
   /// Nevera / frigorífico vintage: silueta top-down con esquinas redondeadas y tirador cromado.
   void _renderFridge(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.68;
-    final h = size * 0.66;
+    final w = size * 0.64;
+    final h = size * 0.62;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -498,11 +724,10 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(fridgeRect, const Radius.circular(5.0));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.94, h * 0.26);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Superficie esmaltada clara
     canvas.drawRRect(rrect, Paint()..color = const Color(0xFFF1EDE4));
-    // Sombreado de volumen 2.5D en el lado derecho
     canvas.drawRect(
       Rect.fromLTWH(x + w - 4, y + 2, 4, h - 4),
       Paint()..color = const Color(0xFFDDD7CC),
@@ -530,8 +755,8 @@ class ArchitecturalFurnitureRenderer {
 
   /// Fregadero / encimera: superficie con poza de agua y grifo cromado top-down.
   void _renderSink(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.74;
-    final h = size * 0.66;
+    final w = size * 0.68;
+    final h = size * 0.60;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -539,7 +764,7 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(sinkRect, const Radius.circular(3.5));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.96, h * 0.26);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Encimera de piedra o acero inoxidable
     canvas.drawRRect(rrect, Paint()..color = const Color(0xFFDFD9D0));
@@ -547,7 +772,7 @@ class ArchitecturalFurnitureRenderer {
 
     // 3. Poza / cubeta del fregadero
     final basinRect = Rect.fromCenter(
-      center: Offset(sinkRect.center.dx, sinkRect.center.dy + 3),
+      center: Offset(sinkRect.center.dx, sinkRect.center.dy + 2.5),
       width: w * 0.62,
       height: h * 0.58,
     );
@@ -558,12 +783,12 @@ class ArchitecturalFurnitureRenderer {
     // 4. Desagüe central
     canvas.drawCircle(basinRect.center, 2.0, Paint()..color = _metalAccent);
 
-    // 5. Grifo cromado en el borde superior
-    final faucetBase = Offset(sinkRect.center.dx, y + 4.5);
+    // 5. Grifo cromado en el borde superior centrado
+    final faucetBase = Offset(size / 2, y + 3.5);
     canvas.drawCircle(faucetBase, 2.5, Paint()..color = _metalHighlight);
     canvas.drawLine(
       faucetBase,
-      Offset(faucetBase.dx, faucetBase.dy + 4.5),
+      Offset(faucetBase.dx, faucetBase.dy + 4.0),
       Paint()
         ..color = _metalHighlight
         ..strokeWidth = 2.0
@@ -573,8 +798,8 @@ class ArchitecturalFurnitureRenderer {
 
   /// Mueble genérico biselado (fallback elegante).
   void _renderGenericCabinet(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint) {
-    final w = size * 0.72;
-    final h = size * 0.65;
+    final w = size * 0.66;
+    final h = size * 0.58;
     final x = (size - w) / 2;
     final y = (size - h) / 2;
 
@@ -582,7 +807,7 @@ class ArchitecturalFurnitureRenderer {
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(3.0));
 
     // 1. Sombra elíptica arrojada
-    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.05), w * 0.94, h * 0.26);
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20);
 
     // 2. Tablero de madera
     canvas.drawRRect(rrect, Paint()..color = _woodLight);

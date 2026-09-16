@@ -7,28 +7,31 @@ import 'package:nexus_mortis/game/board/models/zone_visual_theme.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 
-/// Componente responsable del plano arquitectónico continuo del tablero.
+/// Componente responsable del plano arquitectónico base del tablero.
 ///
+/// Se ubica en [priority = 0] (capa inferior absoluta).
 /// Dibuja en una sola pasada optimizada (con caché de [ui.Picture]):
-/// 1. Suelos texturizados y ambientación de cada habitación.
-/// 2. Marcas de agua blueprint con el nombre de cada zona.
-/// 3. Decoraciones arquitectónicas sutiles no-bloqueantes.
-/// 4. Muros interiores y exteriores continuos, sin duplicados ni gaps.
+/// 1. Papel base arquitectónico.
+/// 2. Suelos texturizados y ambientación de cada habitación.
+/// 3. Alfombras y decoraciones ambientales confinadas dentro del perímetro de la zona.
+/// 4. Nombres de habitación con auto-fit, word-wrap y contorno exterior de alto contraste.
+/// 5. Cuadrícula técnica sutil.
 class FloorPlanComponent extends PositionComponent {
   FloorPlanComponent({
     required this.controller,
     required super.size,
-  });
+    this.geometry,
+  }) {
+    priority = 0;
+  }
 
   final BoardController controller;
+  ZoneGeometryResult? geometry;
   static const _geometryBuilder = ZoneGeometryBuilder();
 
   ui.Picture? _cachedPicture;
   Vector2? _lastRecordedSize;
 
-  // Estilos de muros arquitectónicos
-  static const _colorInteriorWall = ui.Color(0xFF141416); // Muro divisorio negro sólido
-  static const _colorExteriorWall = ui.Color(0xFF0A0A0C); // Muro perimetral exterior negro profundo
   static const _colorPaperBase    = ui.Color(0xFFF0EBE1); // Papel de plano arquitectónico cálido
   static const _colorInternalGrid = ui.Color(0xFFD4CEC3); // Cuadrícula interna sutil técnica
 
@@ -54,6 +57,13 @@ class FloorPlanComponent extends PositionComponent {
     }
   }
 
+  /// Actualiza la geometría precalculada y regenera la caché.
+  void updateGeometry(ZoneGeometryResult newGeometry, Vector2 newSize) {
+    geometry = newGeometry;
+    size = newSize;
+    _rebuildCache(size);
+  }
+
   void _rebuildCache(Vector2 boardSize) {
     if (controller.cells.isEmpty || controller.cells[0].isEmpty) return;
     if (boardSize.x <= 0 || boardSize.y <= 0) return;
@@ -71,14 +81,15 @@ class FloorPlanComponent extends PositionComponent {
       }
     }
 
-    // 1. Calcular geometría continua del tablero y centros visuales óptimos
-    final geom = _geometryBuilder.build(
+    // 1. Usar geometría compartida o calcularla
+    final geom = geometry ?? _geometryBuilder.build(
       rows: rows,
       columns: cols,
       zones: controller.zones,
       boardWidth: boardSize.x,
       boardHeight: boardSize.y,
       blockedCells: blocked,
+      theme: controller.zoneTheme,
     );
 
     // 2. Mapear temas visuales por zona
@@ -105,17 +116,24 @@ class FloorPlanComponent extends PositionComponent {
       final theme = themes[zone.id];
       if (path == null || bounds == null || theme == null) continue;
 
+      final visualCenter = geom.zoneVisualCenters[zone.id] ?? geom.zoneCentroids[zone.id];
+
       // Suelo texturizado claro
       theme.renderFloorTexture(canvas, path, bounds, geom.cellWidth);
 
-      // Alfombra decorativa sutil (capa intermedia)
-      theme.renderRug(canvas, bounds, geom.cellWidth, geom.cellHeight);
+      // Alfombra decorativa sutil (dibujada ÚNICAMENTE si fue evaluada y admitida en geom.zoneRugRects)
+      final rugRect = geom.zoneRugRects[zone.id];
+      if (rugRect != null) {
+        theme.renderRug(
+          canvas,
+          path,
+          rugRect,
+          geom.cellWidth,
+          geom.cellHeight,
+        );
+      }
 
-      // Decoración arquitectónica contextual (no bloqueante)
-      theme.renderAmbientDecoration(canvas, bounds, geom.cellWidth, geom.cellHeight);
-
-      // Nombre de la habitación en mayúsculas ubicado en el mejor punto visual
-      final visualCenter = geom.zoneVisualCenters[zone.id] ?? geom.zoneCentroids[zone.id];
+      // Nombre de la habitación con auto-fit, word-wrap y contorno exterior negro
       if (visualCenter != null) {
         theme.renderRoomWatermark(
           canvas: canvas,
@@ -123,11 +141,12 @@ class FloorPlanComponent extends PositionComponent {
           roomBounds: bounds,
           cellWidth: geom.cellWidth,
           cellHeight: geom.cellHeight,
+          roomClipPath: path,
         );
       }
     }
 
-    // C. Cuadrícula interna sutil (1px, #D0D0D0) en todas las aristas de celda
+    // C. Cuadrícula interna sutil (1px, #D4CEC3) en todas las aristas de celda
     final gridWidth = (geom.cellWidth * 0.015).clamp(0.8, 1.2);
     final gridPaint = Paint()
       ..color = _colorInternalGrid
@@ -143,53 +162,9 @@ class FloorPlanComponent extends PositionComponent {
       canvas.drawLine(Offset(x, 0), Offset(x, boardSize.y), gridPaint);
     }
 
-    // D. Muros Interiores y Exteriores Continuos (Negros, gruesos, dominantes)
-    final wallThickness = (geom.cellWidth * 0.08).clamp(3.5, 6.0);
-
-    // Muros Interiores Continuos
-    _renderWalls(
-      canvas: canvas,
-      walls: geom.interiorWalls,
-      wallColor: _colorInteriorWall,
-      strokeWidth: wallThickness,
-    );
-
-    // Muros Exteriores Perimetrales
-    _renderWalls(
-      canvas: canvas,
-      walls: geom.exteriorWalls,
-      wallColor: _colorExteriorWall,
-      strokeWidth: wallThickness + 0.8,
-    );
-
     _cachedPicture?.dispose();
     _cachedPicture = recorder.endRecording();
     _lastRecordedSize = boardSize.clone();
-  }
-
-  void _renderWalls({
-    required Canvas canvas,
-    required List<WallSegment> walls,
-    required ui.Color wallColor,
-    required double strokeWidth,
-  }) {
-    if (walls.isEmpty) return;
-
-    // Muro principal negro sólido con esquinas limpias
-    final wallPaint = Paint()
-      ..color = wallColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.square
-      ..strokeJoin = StrokeJoin.round;
-
-    final wallPath = Path();
-    for (final wall in walls) {
-      wallPath.moveTo(wall.start.dx, wall.start.dy);
-      wallPath.lineTo(wall.end.dx, wall.end.dy);
-    }
-
-    canvas.drawPath(wallPath, wallPaint);
   }
 
   @override

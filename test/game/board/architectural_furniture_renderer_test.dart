@@ -18,6 +18,11 @@ void main() {
         'obj_caja_fuerte',
         'obj_nevera_vintage',
         'obj_fregadero_acero',
+        'obj_maceta_01',
+        'obj_planta_interior',
+        'obj_reloj_pared',
+        'obj_fuente_patio',
+        'obj_estatua_marmol',
         'obj_desconocido_fallback',
       ];
 

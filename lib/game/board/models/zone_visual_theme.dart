@@ -31,6 +31,7 @@ class ZoneVisualTheme {
     required this.accentColor,
     required this.tileType,
     required this.icon,
+    this.hasRug = false,
   });
 
   final ZoneArchetype archetype;
@@ -39,6 +40,7 @@ class ZoneVisualTheme {
   final ui.Color accentColor;
   final TileType tileType;
   final IconData icon;
+  final bool hasRug;
 
   /// Infiere el tema arquitectónico a partir del nombre o identificador de la zona.
   factory ZoneVisualTheme.fromZoneName(String? name, int zoneIndex) {
@@ -59,10 +61,11 @@ class ZoneVisualTheme {
         accentColor: const ui.Color(0xFF9E6B38), // Ámbar cuero suave
         tileType: TileType.woodPlanks,
         icon: Icons.menu_book_rounded,
+        hasRug: true,
       );
     }
 
-    // 2. Cocina / Comedor / Bodega / Despensa
+    // 2. Cocina / Comedor / Bodega / Despensa / Trabajo (Suelo limpio siempre)
     if (lower.contains('cocina') ||
         lower.contains('comedor') ||
         lower.contains('bodega') ||
@@ -76,10 +79,11 @@ class ZoneVisualTheme {
         accentColor: const ui.Color(0xFFB55D44), // Terracota cálido
         tileType: TileType.checkerboard,
         icon: Icons.restaurant_rounded,
+        hasRug: false,
       );
     }
 
-    // 3. Jardín / Invernadero / Botánico / Rosaleda / Patio / Taller
+    // 3. Jardín / Invernadero / Botánico / Rosaleda / Patio / Taller (Piedra limpia)
     if (lower.contains('jard') ||
         lower.contains('botán') ||
         lower.contains('botan') ||
@@ -100,6 +104,7 @@ class ZoneVisualTheme {
         accentColor: const ui.Color(0xFF477353), // Verde botánico
         tileType: TileType.stone,
         icon: Icons.yard_rounded,
+        hasRug: false,
       );
     }
 
@@ -111,17 +116,19 @@ class ZoneVisualTheme {
         lower.contains('aposento') ||
         lower.contains('camerino') ||
         lower.contains('baño')) {
+      final isNobleBedroom = lower.contains('dormitorio') || lower.contains('aposento') || lower.contains('suite');
       return ZoneVisualTheme(
         archetype: ZoneArchetype.bedroom,
         displayName: name ?? 'DORMITORIO',
         tintColor: const ui.Color(0xFFF3ECE6), // Marfil lino cálido
         accentColor: const ui.Color(0xFF8C5C6F), // Malva empolvado
-        tileType: TileType.woodPlanks,
+        tileType: isNobleBedroom ? TileType.woodPlanks : TileType.classicTiles,
         icon: Icons.bed_rounded,
+        hasRug: isNobleBedroom,
       );
     }
 
-    // 5. Laboratorio / Observatorio / Cúpula / Óptica / Sala de máquinas
+    // 5. Laboratorio / Observatorio / Cúpula / Óptica / Sala de máquinas (Baldosas limpias)
     if (lower.contains('laborat') ||
         lower.contains('observat') ||
         lower.contains('cúpula') ||
@@ -137,10 +144,11 @@ class ZoneVisualTheme {
         accentColor: const ui.Color(0xFF32688C), // Cian pizarra sobrio
         tileType: TileType.classicTiles,
         icon: Icons.science_rounded,
+        hasRug: false,
       );
     }
 
-    // 6. Galería / Museo / Bóveda / Reliquias / Teatro / Escenario
+    // 6. Galería / Museo / Bóveda / Reliquias / Teatro / Escenario (Mármol limpio)
     if (lower.contains('galer') ||
         lower.contains('museo') ||
         lower.contains('bóveda') ||
@@ -163,10 +171,11 @@ class ZoneVisualTheme {
         accentColor: const ui.Color(0xFF967336), // Bronce clásico suave
         tileType: TileType.classicTiles,
         icon: Icons.museum_rounded,
+        hasRug: false,
       );
     }
 
-    // 7. Fallback elegante por defecto (Lounge / Salón)
+    // 7. Fallback elegante por defecto (Lounge / Salón / Zonas genéricas)
     final defaultTints = [
       const ui.Color(0xFFECE6DE),
       const ui.Color(0xFFEFE8E1),
@@ -183,13 +192,23 @@ class ZoneVisualTheme {
     final tint = defaultTints[zoneIndex % defaultTints.length];
     final accent = defaultAccents[zoneIndex % defaultAccents.length];
 
+    final isExplicitLounge = lower.contains('salón') || lower.contains('salon');
+    final genericTileTypes = [
+      TileType.woodPlanks,
+      TileType.classicTiles,
+      TileType.stone,
+      TileType.checkerboard,
+    ];
+
     return ZoneVisualTheme(
       archetype: ZoneArchetype.lounge,
       displayName: name ?? 'SALÓN',
       tintColor: tint,
       accentColor: accent,
-      tileType: TileType.carpet,
+      tileType: isExplicitLounge ? TileType.carpet : genericTileTypes[zoneIndex % genericTileTypes.length],
       icon: Icons.meeting_room_rounded,
+      // Solo habitaciones que explícitamente son salones o como mucho 1 habitación de acento (<= 30%)
+      hasRug: isExplicitLounge || (zoneIndex == 0),
     );
   }
 
@@ -300,22 +319,16 @@ class ZoneVisualTheme {
 
   /// Dibuja una alfombra enriquecida como elemento decorativo del escenario.
   ///
-  /// Mantiene la jerarquía visual estricta:
-  /// Suspect / Candidate / X > Alfombra > Decoración
+  /// Confinada estrictamente dentro del perímetro arquitectónico de la habitación
+  /// mediante [roomClipPath] para evitar que cruce muros en geometrías L, T o irregulares.
   void renderRug(
     ui.Canvas canvas,
-    ui.Rect bounds,
+    ui.Path roomClipPath,
+    ui.Rect rugRect,
     double cellW,
-    double cellH,
-  ) {
-    final shouldHaveRug = archetype == ZoneArchetype.bedroom ||
-        archetype == ZoneArchetype.lounge ||
-        archetype == ZoneArchetype.library ||
-        archetype == ZoneArchetype.gallery;
-
-    if (!shouldHaveRug) return;
-    if (bounds.width < cellW * 0.82 || bounds.height < cellH * 0.82) return;
-
+    double cellH, {
+    ui.Offset? visualCenter,
+  }) {
     final ui.Color rugBaseColor;
     switch (archetype) {
       case ZoneArchetype.bedroom:
@@ -334,14 +347,10 @@ class ZoneVisualTheme {
         rugBaseColor = const ui.Color(0xFF555B63);
     }
 
-    final rugW = min(bounds.width * 0.74, cellW * 2.2);
-    final rugH = min(bounds.height * 0.74, cellH * 2.2);
-    final rugRect = ui.Rect.fromCenter(
-      center: bounds.center,
-      width: rugW,
-      height: rugH,
-    );
     final rrect = ui.RRect.fromRectAndRadius(rugRect, const ui.Radius.circular(5.0));
+
+    canvas.save();
+    canvas.clipPath(roomClipPath);
 
     // 1. Sombra suave arrojada por la alfombra
     canvas.drawRRect(
@@ -349,7 +358,7 @@ class ZoneVisualTheme {
       ui.Paint()..color = const ui.Color(0x20000000)..style = ui.PaintingStyle.fill,
     );
 
-    // 2. Relleno textil noble de bajo contraste (controlado para gameplay)
+    // 2. Relleno textil noble de bajo contraste
     canvas.drawRRect(
       rrect,
       ui.Paint()..color = rugBaseColor.withAlpha(50)..style = ui.PaintingStyle.fill,
@@ -366,7 +375,7 @@ class ZoneVisualTheme {
     );
 
     // 4. Cenefa interior
-    if (rugW > 32 && rugH > 32) {
+    if (rugRect.width > 32 && rugRect.height > 32) {
       canvas.drawRRect(
         rrect.deflate(3.5),
         ui.Paint()
@@ -377,8 +386,8 @@ class ZoneVisualTheme {
     }
 
     // 5. Medallón central sutil
-    if (rugW > 45 && rugH > 45) {
-      final medallionSize = min(min(rugW, rugH) * 0.35, 34.0);
+    if (rugRect.width > 45 && rugRect.height > 45) {
+      final medallionSize = min(min(rugRect.width, rugRect.height) * 0.35, 34.0);
       final medallion = ui.RRect.fromRectAndRadius(
         ui.Rect.fromCenter(
           center: rugRect.center,
@@ -395,221 +404,179 @@ class ZoneVisualTheme {
           ..strokeWidth = 0.7,
       );
     }
+
+    canvas.restore();
   }
 
-  /// Dibuja detalles arquitectónicos decorativos discretos (no colisionables).
+  /// Ambientación contextual del escenario.
+  /// Neutralizada en su origen para erradicar cualquier artefacto residual en esquinas.
   void renderAmbientDecoration(
     ui.Canvas canvas,
+    ui.Path roomClipPath,
     ui.Rect bounds,
     double cellW,
     double cellH,
   ) {
-    final decorPaint = ui.Paint()
-      ..color = accentColor.withAlpha(50)
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = (cellW * 0.015).clamp(0.8, 1.2);
-
-    final fillPaint = ui.Paint()
-      ..color = accentColor.withAlpha(14)
-      ..style = ui.PaintingStyle.fill;
-
-    const pad = 6.0;
-
-    switch (archetype) {
-      case ZoneArchetype.kitchen:
-        final counterRect = ui.Rect.fromLTWH(bounds.left + pad, bounds.top + pad, cellW * 0.40, cellH * 0.30);
-        canvas.drawRect(counterRect, fillPaint);
-        canvas.drawRect(counterRect, decorPaint);
-        final cx1 = counterRect.left + counterRect.width * 0.3;
-        final cx2 = counterRect.left + counterRect.width * 0.7;
-        final cy = counterRect.center.dy;
-        canvas.drawCircle(ui.Offset(cx1, cy), 2.5, decorPaint);
-        canvas.drawCircle(ui.Offset(cx2, cy), 2.5, decorPaint);
-        break;
-
-      case ZoneArchetype.library:
-        final shelfRect = ui.Rect.fromLTWH(bounds.left + pad, bounds.top + pad, min(bounds.width - pad * 2, cellW * 0.70), 5.0);
-        canvas.drawRect(shelfRect, fillPaint);
-        canvas.drawRect(shelfRect, decorPaint);
-        for (double x = shelfRect.left + 5; x < shelfRect.right - 4; x += 6) {
-          canvas.drawLine(ui.Offset(x, shelfRect.top), ui.Offset(x, shelfRect.bottom), decorPaint);
-        }
-        break;
-
-      case ZoneArchetype.bedroom:
-        final rugRect = ui.Rect.fromLTWH(bounds.left + pad, bounds.top + pad, cellW * 0.35, cellH * 0.35);
-        canvas.drawRRect(ui.RRect.fromRectAndRadius(rugRect, const ui.Radius.circular(3)), fillPaint);
-        canvas.drawRRect(ui.RRect.fromRectAndRadius(rugRect, const ui.Radius.circular(3)), decorPaint);
-        break;
-
-      case ZoneArchetype.garden:
-        final center = ui.Offset(bounds.right - pad - 10, bounds.bottom - pad - 10);
-        canvas.drawCircle(center, 5.5, fillPaint);
-        canvas.drawCircle(center, 5.5, decorPaint);
-        for (int i = 0; i < 4; i++) {
-          final rad = (i * pi / 2) + (pi / 4);
-          canvas.drawLine(center, ui.Offset(center.dx + cos(rad) * 7, center.dy + sin(rad) * 7), decorPaint);
-        }
-        break;
-
-      case ZoneArchetype.laboratory:
-        final deskRect = ui.Rect.fromLTWH(bounds.left + pad, bounds.top + pad, cellW * 0.38, cellH * 0.28);
-        canvas.drawRect(deskRect, fillPaint);
-        canvas.drawRect(deskRect, decorPaint);
-        canvas.drawLine(ui.Offset(deskRect.left + 4, deskRect.center.dy), ui.Offset(deskRect.right - 4, deskRect.center.dy), decorPaint);
-        break;
-
-      case ZoneArchetype.gallery:
-        final pedestal = ui.Rect.fromLTWH(bounds.left + pad, bounds.top + pad, 14, 14);
-        canvas.drawRect(pedestal, fillPaint);
-        canvas.drawRect(pedestal, decorPaint);
-        canvas.drawRect(pedestal.deflate(2.5), decorPaint);
-        break;
-
-      case ZoneArchetype.lounge:
-        final rug = ui.Rect.fromLTWH(bounds.left + pad, bounds.top + pad, min(bounds.width * 0.38, cellW * 0.50), min(bounds.height * 0.38, cellH * 0.50));
-        canvas.drawRRect(ui.RRect.fromRectAndRadius(rug, const ui.Radius.circular(3)), fillPaint);
-        canvas.drawRRect(ui.RRect.fromRectAndRadius(rug, const ui.Radius.circular(3)), decorPaint);
-        break;
-    }
+    // No-op deliberado: la arquitectura limpia no dibuja primitivas ambiguas en esquinas
   }
 
-  /// Estampa el nombre de la habitación como un Robust Text Component multi-línea,
-  /// con tipografía pesada w900, sombra de alto contraste y sin truncamiento por ellipsis.
+  /// Estampa el nombre de la habitación con estilo cómic/detective de alta visibilidad:
+  /// - Auto-fit dinámico estrictamente acotado entre 9.0 y 13.0 px.
+  /// - Word wrapping limpio entre palabras completas (1–3 líneas, cero ellipsis).
+  /// - Margen de seguridad respecto a muros (proporcional, >= 6px).
+  /// - Borde exterior negro grueso (2.5px) + relleno blanco nítido.
   void renderRoomWatermark({
     required ui.Canvas canvas,
     required ui.Offset visualCenter,
     required ui.Rect roomBounds,
     required double cellWidth,
     required double cellHeight,
+    ui.Path? roomClipPath,
   }) {
-    final text = displayName.toUpperCase().trim();
-    if (text.isEmpty) return;
+    final rawText = displayName.toUpperCase().trim();
+    if (rawText.isEmpty) return;
 
-    final words = text.split(RegExp(r'\s+'));
+    final words = rawText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return;
 
-    // Ancho y alto máximos disponibles dentro de la habitación
-    final availW = max(min(roomBounds.width - cellWidth * 0.20, cellWidth * 2.5), cellWidth * 0.72);
-    final availH = max(roomBounds.height - cellHeight * 0.20, cellHeight * 0.72);
+    // Detectar si la posición visual está confinada en el margen superior de la celda
+    final localCellY = visualCenter.dy % cellHeight;
+    final isConstrainedTop = localCellY < cellHeight * 0.28;
 
-    // 1. División inteligente por palabras completas (1, 2 o hasta 3 líneas)
-    final lines = _splitWordsIntoLines(words, availW, cellWidth);
+    // Margen de seguridad respecto a los muros negros: >= 6px, proporcional a tileSize
+    final safeMargin = max(6.0, cellWidth * 0.09);
+    final maxAvailW = max(30.0, cellWidth - (safeMargin * 2));
+    final maxAvailH = isConstrainedTop
+        ? max(12.0, cellHeight * 0.22)
+        : max(30.0, cellHeight - (safeMargin * 2));
 
-    // 2. Cálculo adaptativo de tamaño de fuente
-    final maxCharCount = lines.map((l) => l.length).reduce(max);
-    var fontSize = (min(cellWidth, cellHeight) * 0.17).clamp(8.5, 12.5);
+    // 1. Partición estricta entre palabras completas (máximo 3 líneas)
+    final lines = isConstrainedTop
+        ? words.take(2).toList()
+        : _wrapWordsIntoLines(words, maxAvailW, cellWidth);
 
-    // Reducción proporcional si alguna línea excede el ancho disponible
-    final estimatedW = maxCharCount * fontSize * 0.65;
-    if (estimatedW > availW) {
-      fontSize = (availW / (maxCharCount * 0.65)).clamp(7.5, 12.5);
-    }
-    // Verificación de altura disponible
-    final estimatedH = lines.length * fontSize * 1.25;
-    if (estimatedH > availH) {
-      fontSize = (availH / (lines.length * 1.25)).clamp(7.0, fontSize);
+    // 2. Auto-fit de tamaño de fuente en el rango estricto de 9.0 a 13.0 px
+    final longestWordLen = words.map((w) => w.length).reduce(max);
+    final longestLineLen = lines.map((l) => l.length).reduce(max);
+
+    double fontSize;
+    if (isConstrainedTop) {
+      fontSize = (cellWidth * 0.80 / max(longestWordLen, 3)).clamp(7.5, 8.5);
+    } else {
+      final widthFactor = (maxAvailW * 0.88) / (longestLineLen * 0.58);
+      final heightFactor = (maxAvailH * 0.88) / (lines.length * 1.25);
+      final wordLimit = (maxAvailW * 0.95) / max(longestWordLen, 3);
+      fontSize = min(13.0, min(widthFactor, min(heightFactor, wordLimit))).clamp(9.0, 13.0);
     }
 
     final formattedText = lines.join('\n');
+    final outlineStrokeWidth = (cellWidth * 0.038).clamp(2.0, 2.8);
 
-    // 3. Construcción del párrafo
-    // Pase 1: Sombra/relieve de contorno para máximo contraste
-    final shadowPb = ui.ParagraphBuilder(
+    // 3. Pasada 1: Contorno exterior negro grueso (2.5px) con remates redondos
+    final strokePb = ui.ParagraphBuilder(
       ui.ParagraphStyle(
         textAlign: ui.TextAlign.center,
         fontSize: fontSize,
-        height: 1.12,
-        maxLines: 3,
+        height: 1.15,
       ),
     )
       ..pushStyle(ui.TextStyle(
-        color: const ui.Color(0x65000000),
+        foreground: ui.Paint()
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = outlineStrokeWidth
+          ..strokeCap = ui.StrokeCap.round
+          ..strokeJoin = ui.StrokeJoin.round
+          ..color = const ui.Color(0xFF000000),
         fontWeight: ui.FontWeight.w900,
-        letterSpacing: 1.1,
+        letterSpacing: 0.8,
         fontFamily: 'Roboto',
       ))
       ..addText(formattedText);
 
-    final shadowParagraph = shadowPb.build()..layout(ui.ParagraphConstraints(width: availW + 10));
+    final strokeParagraph = strokePb.build()..layout(ui.ParagraphConstraints(width: maxAvailW + 20));
 
-    // Pase 2: Tinta frontal blueprint en carbón nítido
-    final forePb = ui.ParagraphBuilder(
+    // 4. Pasada 2: Relleno blanco nítido de alto contraste
+    final fillPb = ui.ParagraphBuilder(
       ui.ParagraphStyle(
         textAlign: ui.TextAlign.center,
         fontSize: fontSize,
-        height: 1.12,
-        maxLines: 3,
+        height: 1.15,
       ),
     )
       ..pushStyle(ui.TextStyle(
-        color: const ui.Color(0xFF262422).withAlpha(185),
+        color: const ui.Color(0xFFFFFFFF),
         fontWeight: ui.FontWeight.w900,
-        letterSpacing: 1.1,
+        letterSpacing: 0.8,
         fontFamily: 'Roboto',
       ))
       ..addText(formattedText);
 
-    final foreParagraph = forePb.build()..layout(ui.ParagraphConstraints(width: availW + 10));
+    final fillParagraph = fillPb.build()..layout(ui.ParagraphConstraints(width: maxAvailW + 20));
 
-    // 4. Centrado y contención estricta dentro de los límites interiores de la habitación
-    final textW = foreParagraph.maxIntrinsicWidth;
-    final textH = foreParagraph.height;
-    final halfW = textW / 2;
-    final halfH = textH / 2;
+    // 5. Centrado sobre visualCenter
+    final textW = fillParagraph.maxIntrinsicWidth;
+    final textH = fillParagraph.height;
+    final drawOffset = ui.Offset(
+      visualCenter.dx - (textW / 2),
+      visualCenter.dy - (textH / 2),
+    );
 
-    final safeMarginX = cellWidth * 0.08;
-    final safeMarginY = cellHeight * 0.08;
-
-    final minX = roomBounds.left + safeMarginX;
-    final maxX = roomBounds.right - safeMarginX - textW;
-    final minY = roomBounds.top + safeMarginY;
-    final maxY = roomBounds.bottom - safeMarginY - textH;
-
-    final clampedX = (visualCenter.dx - halfW).clamp(minX, max(minX, maxX)).toDouble();
-    final clampedY = (visualCenter.dy - halfH).clamp(minY, max(minY, maxY)).toDouble();
-
-    final drawOffset = ui.Offset(clampedX, clampedY);
-
-    // Dibujar sombra dura/relieve
-    canvas.drawParagraph(shadowParagraph, drawOffset + const ui.Offset(0.9, 1.2));
-    // Dibujar texto principal
-    canvas.drawParagraph(foreParagraph, drawOffset);
+    canvas.save();
+    if (roomClipPath != null) {
+      canvas.clipPath(roomClipPath);
+    }
+    // Sombra sutil proyectada
+    canvas.drawParagraph(strokeParagraph, drawOffset + const ui.Offset(0.5, 1.0));
+    // Contorno exterior negro
+    canvas.drawParagraph(strokeParagraph, drawOffset);
+    // Relleno blanco
+    canvas.drawParagraph(fillParagraph, drawOffset);
+    canvas.restore();
   }
 
-  static List<String> _splitWordsIntoLines(List<String> words, double availW, double cellWidth) {
+  /// Distribuye palabras completas en 1, 2 o hasta 3 líneas balanceadas,
+  /// garantizando que ninguna palabra se corte a la mitad y cero ellipsis.
+  static List<String> _wrapWordsIntoLines(List<String> words, double availW, double cellW) {
     if (words.length <= 1) return words;
 
-    // Si son dos palabras, colocarlas en 2 líneas si una sola línea resultaría muy apretada
     if (words.length == 2) {
-      if (words[0].length + words[1].length > 10 || availW < cellWidth * 1.5) {
-        return [words[0], words[1]];
+      // Si son 2 palabras, preferir 2 líneas a menos que ambas sean muy cortas
+      final combinedLen = words[0].length + words[1].length + 1;
+      if (combinedLen <= 7 && availW >= cellW * 0.75) {
+        return ['${words[0]} ${words[1]}'];
       }
-      return ['${words[0]} ${words[1]}'];
+      return [words[0], words[1]];
     }
 
     if (words.length == 3) {
+      // Evaluar si unir las dos primeras o las dos últimas
       if (words[0].length + words[1].length <= 8) {
         return ['${words[0]} ${words[1]}', words[2]];
-      } else {
+      } else if (words[1].length + words[2].length <= 8) {
         return [words[0], '${words[1]} ${words[2]}'];
+      } else {
+        return [words[0], words[1], words[2]];
       }
     }
 
-    // Para 4 o más palabras, empacar en 2 o 3 líneas balanceadas
-    final totalChars = words.fold<int>(0, (sum, w) => sum + w.length) + words.length - 1;
-    final targetPerLine = (totalChars / 3).ceil();
+    // 4 o más palabras: distribuir en 2 o máximo 3 líneas balanceadas
+    final totalLen = words.fold<int>(0, (sum, w) => sum + w.length) + words.length - 1;
+    final targetLineLen = (totalLen / 2).ceil();
     final lines = <String>[];
     var currentLine = words.first;
 
     for (int i = 1; i < words.length; i++) {
-      if (lines.length < 2 && (currentLine.length + 1 + words[i].length) > targetPerLine) {
+      final nextWord = words[i];
+      final projectedLen = currentLine.length + 1 + nextWord.length;
+
+      if (lines.length < 2 && projectedLen > targetLineLen) {
         lines.add(currentLine);
-        currentLine = words[i];
+        currentLine = nextWord;
       } else {
-        currentLine = '$currentLine ${words[i]}';
+        currentLine = '$currentLine $nextWord';
       }
     }
     lines.add(currentLine);
-    return lines;
+    return lines.take(3).toList();
   }
 }

@@ -6,6 +6,7 @@ import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_theme.dart';
 
 /// Define la totalidad de un caso o nivel dentro de Nexus Mortis.
 ///
@@ -29,6 +30,7 @@ class CaseData {
     this.globalRules = const [],
     this.requiredCaseId,
     this.origin = CaseOrigin.campaign,
+    this.zoneTheme,
   });
 
   final String id;
@@ -74,6 +76,9 @@ class CaseData {
   /// Por defecto es `CaseOrigin.campaign`.
   final CaseOrigin origin;
 
+  /// Tema ambiental cerrado del caso (metadata/presentación contextual).
+  final ZoneTheme? zoneTheme;
+
   CaseData copyWith({
     String? id,
     String? title,
@@ -91,6 +96,7 @@ class CaseData {
     SolutionData? solution,
     String? requiredCaseId,
     CaseOrigin? origin,
+    ZoneTheme? zoneTheme,
   }) {
     return CaseData(
       id: id ?? this.id,
@@ -109,6 +115,7 @@ class CaseData {
       solution: solution ?? this.solution,
       requiredCaseId: requiredCaseId ?? this.requiredCaseId,
       origin: origin ?? this.origin,
+      zoneTheme: zoneTheme ?? this.zoneTheme,
     );
   }
 }

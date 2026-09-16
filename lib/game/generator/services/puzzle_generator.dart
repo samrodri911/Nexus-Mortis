@@ -129,6 +129,7 @@ class PuzzleGenerator {
         clues: const [],
         globalRules: const [],
         solution: solution,
+        zoneTheme: mystery.theme,
       );
 
       // =======================================================================
@@ -165,21 +166,9 @@ class PuzzleGenerator {
       );
       if (analysis == null) continue;
 
-      tempCase = CaseData(
-        id: tempCase.id,
-        title: tempCase.title,
-        description: tempCase.description,
+      tempCase = tempCase.copyWith(
         difficulty: _mapDifficulty(analysis.level),
-        boardRows: tempCase.boardRows,
-        boardColumns: tempCase.boardColumns,
-        zones: tempCase.zones,
-        suspects: tempCase.suspects,
-        victimId: tempCase.victimId,
-        killerId: tempCase.killerId,
-        placedObjects: tempCase.placedObjects,
-        clues: tempCase.clues,
-        globalRules: tempCase.globalRules,
-        solution: tempCase.solution,
+        zoneTheme: tempCase.zoneTheme,
       );
 
       stopwatch.stop();

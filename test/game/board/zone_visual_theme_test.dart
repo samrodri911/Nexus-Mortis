@@ -59,9 +59,10 @@ void main() {
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
       final bounds = const ui.Rect.fromLTWH(0, 0, 200, 200);
+      final path = ui.Path()..addRect(bounds);
 
       expect(
-        () => bedroomTheme.renderRug(canvas, bounds, 100, 100),
+        () => bedroomTheme.renderRug(canvas, path, bounds, 100, 100),
         returnsNormally,
       );
 
