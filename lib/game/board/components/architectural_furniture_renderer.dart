@@ -53,6 +53,7 @@ class ArchitecturalFurnitureRenderer {
     String? objectLabel,
     required Rect cellRect,
     required double tileSize,
+    bool isDecorative = false,
   }) {
     final lowerId = objectId.toLowerCase();
 
@@ -61,14 +62,14 @@ class ArchitecturalFurnitureRenderer {
     final detailWidth = (tileSize * 0.020).clamp(0.9, 1.6);
 
     final outlinePaint = Paint()
-      ..color = _outlineColor
+      ..color = isDecorative ? _outlineColor.withAlpha(195) : _outlineColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = outlineWidth
       ..strokeJoin = ui.StrokeJoin.round
       ..strokeCap = ui.StrokeCap.round;
 
     final detailPaint = Paint()
-      ..color = _outlineColor
+      ..color = isDecorative ? _outlineColor.withAlpha(135) : _outlineColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = detailWidth
       ..strokeJoin = ui.StrokeJoin.round
@@ -79,7 +80,25 @@ class ArchitecturalFurnitureRenderer {
     // Salvaguarda visual: garantizar que ningún trazo sobrepase la celda física
     canvas.clipRect(Rect.fromLTWH(0, 0, tileSize, tileSize));
 
-    if (lowerId.contains('cama') || lowerId.contains('bed')) {
+    if (lowerId.contains('vitrina') || lowerId.contains('display')) {
+      _renderDisplayCase(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('caballete') || lowerId.contains('easel')) {
+      _renderEasel(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('sarcofago') || lowerId.contains('sarcófago') || lowerId.contains('sarcophagus')) {
+      _renderSarcophagus(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('anfora') || lowerId.contains('ánfora') || lowerId.contains('amphora') || lowerId.contains('urna')) {
+      _renderAmphora(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('pedestal') || lowerId.contains('columna') || lowerId.contains('column')) {
+      _renderPedestal(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('atril') || lowerId.contains('stand') || lowerId.contains('partitura')) {
+      _renderMusicStand(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('foco') || lowerId.contains('spotlight')) {
+      _renderSpotlight(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('terciopelo') || lowerId.contains('velvet')) {
+      _renderVelvetChair(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('banco') || lowerId.contains('bench')) {
+      _renderGardenBench(canvas, tileSize, outlinePaint, detailPaint, isDecorative);
+    } else if (lowerId.contains('cama') || lowerId.contains('bed')) {
       _renderBed(canvas, tileSize, outlinePaint, detailPaint);
     } else if (lowerId.contains('silla') || lowerId.contains('chair') || lowerId.contains('sillon') || lowerId.contains('sillón')) {
       _renderChair(canvas, tileSize, outlinePaint, detailPaint);
@@ -115,7 +134,7 @@ class ArchitecturalFurnitureRenderer {
   }
 
   /// Dibuja la sombra elíptica arrojada en la base del mueble para separarlo visualmente del piso.
-  void _drawDepthShadow(Canvas canvas, double cx, double cy, double width, double height) {
+  void _drawDepthShadow(Canvas canvas, double cx, double cy, double width, double height, [bool isDecorative = false]) {
     final shadowRect = Rect.fromCenter(
       center: Offset(cx, cy),
       width: width,
@@ -124,7 +143,7 @@ class ArchitecturalFurnitureRenderer {
     canvas.drawOval(
       shadowRect,
       Paint()
-        ..color = const Color(0x30000000)
+        ..color = Color(isDecorative ? 0x18000000 : 0x30000000)
         ..style = PaintingStyle.fill,
     );
   }
@@ -820,6 +839,343 @@ class ArchitecturalFurnitureRenderer {
         ..color = _woodMedium.withAlpha(120)
         ..style = PaintingStyle.stroke
         ..strokeWidth = detailPaint.strokeWidth,
+    );
+  }
+
+  /// Vitrina de museo: expositor de madera noble con urna de cristal, cojín de terciopelo y reliquia dorada.
+  void _renderDisplayCase(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final w = size * 0.64;
+    final h = size * 0.60;
+    final x = (size - w) / 2;
+    final y = (size - h) / 2;
+    final baseRect = Rect.fromLTWH(x, y, w, h);
+    final baseRRect = RRect.fromRectAndRadius(baseRect, const Radius.circular(3.0));
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, size / 2, y + h - (h * 0.04), w * 0.92, h * 0.20, isDecorative);
+
+    // 2. Base de madera o bronce
+    canvas.drawRRect(baseRRect, Paint()..color = _woodDark);
+    canvas.drawRRect(baseRRect, outlinePaint);
+
+    // 3. Interior de la vitrina con cojín de terciopelo
+    final cushionRect = baseRect.deflate(size * 0.05);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(cushionRect, const Radius.circular(2.0)),
+      Paint()..color = const Color(0xFF8B2535),
+    );
+
+    // 4. Reliquia / joya central dorada
+    final relicCenter = Offset(size / 2, size / 2);
+    canvas.drawCircle(relicCenter, size * 0.08, Paint()..color = const Color(0xFFFFD54F));
+    canvas.drawCircle(relicCenter, size * 0.08, detailPaint);
+    canvas.drawCircle(relicCenter + const Offset(-1.0, -1.0), 1.2, Paint()..color = const Color(0xFFFFF9C4));
+
+    // 5. Brillo especular diagonal del cristal
+    final glassShine = Paint()
+      ..color = const Color(0x35B0D8FF)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(x + 4, y + 4), Offset(x + w - 4, y + h - 4), glassShine);
+  }
+
+  /// Caballete de artista: trípode de madera sosteniendo un lienzo con pintura top-down.
+  void _renderEasel(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final canvasW = size * 0.62;
+    final canvasH = size * 0.44;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + canvasH * 0.55, canvasW * 0.95, canvasH * 0.40, isDecorative);
+
+    // 2. Patas del trípode de madera
+    final legPaint = Paint()
+      ..color = _woodMedium
+      ..strokeWidth = 2.2
+      ..strokeCap = ui.StrokeCap.round;
+    canvas.drawLine(Offset(cx, cy - size * 0.28), Offset(cx - size * 0.26, cy + size * 0.30), legPaint);
+    canvas.drawLine(Offset(cx, cy - size * 0.28), Offset(cx + size * 0.26, cy + size * 0.30), legPaint);
+    canvas.drawLine(Offset(cx, cy - size * 0.28), Offset(cx, cy + size * 0.32), legPaint);
+
+    // 3. Lienzo rectangular montado sobre el caballete
+    final canvasRect = Rect.fromCenter(center: Offset(cx, cy), width: canvasW, height: canvasH);
+    canvas.drawRect(canvasRect, Paint()..color = const Color(0xFFF9F5EC));
+    canvas.drawRect(canvasRect, outlinePaint);
+
+    // Trazo pictórico en el lienzo
+    canvas.drawCircle(Offset(cx - 4, cy - 2), 4.0, Paint()..color = const Color(0xFF7FA87F));
+    canvas.drawCircle(Offset(cx + 5, cy + 2), 3.5, Paint()..color = const Color(0xFFD49C54));
+
+    // Repisa inferior del caballete con pincel
+    final ledgeRect = Rect.fromLTWH(canvasRect.left - 2, canvasRect.bottom - 2, canvasW + 4, 3.5);
+    canvas.drawRect(ledgeRect, Paint()..color = _woodDark);
+    canvas.drawRect(ledgeRect, detailPaint);
+  }
+
+  /// Sarcófago: silueta cónica estilizada de piedra con franjas egipcias ornamentales.
+  void _renderSarcophagus(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final w = size * 0.48;
+    final h = size * 0.72;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + h * 0.44, w * 1.05, h * 0.25, isDecorative);
+
+    // 2. Silueta trapezoidal / estilizada del sarcófago
+    final path = Path()
+      ..moveTo(cx - w * 0.35, cy - h * 0.48)
+      ..lineTo(cx + w * 0.35, cy - h * 0.48)
+      ..lineTo(cx + w * 0.50, cy - h * 0.18)
+      ..lineTo(cx + w * 0.38, cy + h * 0.48)
+      ..lineTo(cx - w * 0.38, cy + h * 0.48)
+      ..lineTo(cx - w * 0.50, cy - h * 0.18)
+      ..close();
+
+    canvas.drawPath(path, Paint()..color = const Color(0xFFDECA8B));
+    canvas.drawPath(path, outlinePaint);
+
+    // 3. Tocado ceremonial con franjas lapislázuli
+    final headRect = Rect.fromCenter(center: Offset(cx, cy - h * 0.28), width: w * 0.65, height: h * 0.25);
+    canvas.drawOval(headRect, Paint()..color = const Color(0xFF2C558F));
+    canvas.drawOval(headRect, detailPaint);
+
+    // Rostro dorado
+    canvas.drawCircle(Offset(cx, cy - h * 0.28), w * 0.18, Paint()..color = const Color(0xFFFFD54F));
+    canvas.drawCircle(Offset(cx, cy - h * 0.28), w * 0.18, detailPaint);
+
+    // 4. Franjas jeroglíficas en el cuerpo
+    for (double dy = cy - h * 0.05; dy < cy + h * 0.42; dy += h * 0.12) {
+      canvas.drawLine(Offset(cx - w * 0.30, dy), Offset(cx + w * 0.30, dy), detailPaint);
+    }
+  }
+
+  /// Ánfora / urna clásica: vasija de terracota con doble asa curva top-down.
+  void _renderAmphora(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final radius = size * 0.25;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + radius * 0.55, radius * 2.4, radius * 0.90, isDecorative);
+
+    // 2. Asas curvas laterales
+    final handlePaint = Paint()
+      ..color = _potTerracotta
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (size * 0.040).clamp(2.0, 3.2)
+      ..strokeCap = ui.StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(cx - radius * 0.85, cy), width: radius * 0.80, height: radius * 1.30),
+      pi * 0.5,
+      pi,
+      false,
+      handlePaint,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(cx + radius * 0.85, cy), width: radius * 0.80, height: radius * 1.30),
+      -pi * 0.5,
+      pi,
+      false,
+      handlePaint,
+    );
+
+    // 3. Cuerpo esférico de terracota
+    canvas.drawCircle(Offset(cx, cy), radius, Paint()..color = _potTerracotta);
+    canvas.drawCircle(Offset(cx, cy), radius, outlinePaint);
+
+    // 4. Cuello y boca interior del ánfora
+    canvas.drawCircle(Offset(cx, cy), radius * 0.55, Paint()..color = const Color(0xFFA65030));
+    canvas.drawCircle(Offset(cx, cy), radius * 0.55, detailPaint);
+    canvas.drawCircle(Offset(cx, cy), radius * 0.28, Paint()..color = const Color(0xFF4A2012));
+
+    // Banda decorativa incisa
+    canvas.drawCircle(
+      Offset(cx, cy),
+      radius * 0.78,
+      Paint()
+        ..color = const Color(0xFF7A351D)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+  }
+
+  /// Pedestal / Columna clásica: plinto de mármol con fuste acanalado y remate superior.
+  void _renderPedestal(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final plinthSize = size * 0.58;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + plinthSize * 0.42, plinthSize * 1.08, plinthSize * 0.35, isDecorative);
+
+    // 2. Plinto base cuadrado de mármol
+    final plinthRect = Rect.fromCenter(center: Offset(cx, cy), width: plinthSize, height: plinthSize);
+    final plinthRRect = RRect.fromRectAndRadius(plinthRect, const Radius.circular(3.5));
+    canvas.drawRRect(plinthRRect, Paint()..color = _marbleShadow);
+    canvas.drawRRect(plinthRRect, outlinePaint);
+
+    // 3. Fuste circular acanalado
+    final shaftRadius = plinthSize * 0.40;
+    canvas.drawCircle(Offset(cx, cy), shaftRadius, Paint()..color = _marbleLight);
+    canvas.drawCircle(Offset(cx, cy), shaftRadius, detailPaint);
+
+    // Acanaladuras radiales / concéntricas
+    canvas.drawCircle(
+      Offset(cx, cy),
+      shaftRadius * 0.65,
+      Paint()
+        ..color = _marbleShadow
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+    canvas.drawCircle(Offset(cx, cy), shaftRadius * 0.25, Paint()..color = const Color(0xFFC7BFAF));
+    canvas.drawCircle(Offset(cx, cy), shaftRadius * 0.25, detailPaint);
+  }
+
+  /// Atril / soporte de partituras: trípode de latón con partitura abierta top-down.
+  void _renderMusicStand(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final w = size * 0.54;
+    final h = size * 0.38;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + h * 0.60, w * 1.05, h * 0.35, isDecorative);
+
+    // 2. Base de latón
+    final baseRadius = size * 0.12;
+    canvas.drawCircle(Offset(cx, cy + h * 0.20), baseRadius, Paint()..color = _brassAccent);
+    canvas.drawCircle(Offset(cx, cy + h * 0.20), baseRadius, detailPaint);
+
+    // 3. Bandeja inclinada con partituras
+    final deskRect = Rect.fromCenter(center: Offset(cx, cy - h * 0.10), width: w, height: h);
+    final deskRRect = RRect.fromRectAndRadius(deskRect, const Radius.circular(2.0));
+    canvas.drawRRect(deskRRect, Paint()..color = const Color(0xFF2E2B28));
+    canvas.drawRRect(deskRRect, outlinePaint);
+
+    // Partitura blanca abierta (dos páginas)
+    final sheetW = w * 0.42;
+    final sheetH = h * 0.72;
+    final sheetY = deskRect.top + (deskRect.height - sheetH) / 2;
+    canvas.drawRect(Rect.fromLTWH(cx - sheetW - 1, sheetY, sheetW, sheetH), Paint()..color = const Color(0xFFFFFDF5));
+    canvas.drawRect(Rect.fromLTWH(cx + 1, sheetY, sheetW, sheetH), Paint()..color = const Color(0xFFFFFDF5));
+
+    final staffPaint = Paint()
+      ..color = const Color(0xFF333333)
+      ..strokeWidth = 0.6;
+    for (double dy = sheetY + 2.5; dy < sheetY + sheetH - 2; dy += 3.0) {
+      canvas.drawLine(Offset(cx - sheetW + 1, dy), Offset(cx - 2, dy), staffPaint);
+      canvas.drawLine(Offset(cx + 3, dy), Offset(cx + sheetW, dy), staffPaint);
+    }
+  }
+
+  /// Foco escénico: luminaria cilíndrica teatral con montura y haz frontal.
+  void _renderSpotlight(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final w = size * 0.42;
+    final h = size * 0.54;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + h * 0.45, w * 1.15, h * 0.35, isDecorative);
+
+    // 2. Horquilla / soporte metálico
+    final yokeRect = Rect.fromCenter(center: Offset(cx, cy), width: w * 1.25, height: h * 0.75);
+    canvas.drawArc(
+      yokeRect,
+      pi * 0.8,
+      pi * 1.4,
+      false,
+      Paint()
+        ..color = _metalAccent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2,
+    );
+
+    // 3. Cuerpo cilíndrico del proyector
+    final bodyRect = Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
+    final bodyRRect = RRect.fromRectAndRadius(bodyRect, const Radius.circular(3.0));
+    canvas.drawRRect(bodyRRect, Paint()..color = const Color(0xFF262423));
+    canvas.drawRRect(bodyRRect, outlinePaint);
+
+    // 4. Lente frontal con luz cálida
+    final lensRect = Rect.fromLTWH(bodyRect.left + 2, bodyRect.top + 2, w - 4, h * 0.28);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(lensRect, const Radius.circular(2.0)),
+      Paint()..color = const Color(0xFFFFEE99),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(lensRect, const Radius.circular(2.0)),
+      detailPaint,
+    );
+
+    canvas.drawCircle(Offset(bodyRect.left - 1.5, cy), 1.8, Paint()..color = _brassAccent);
+    canvas.drawCircle(Offset(bodyRect.right + 1.5, cy), 1.8, Paint()..color = _brassAccent);
+  }
+
+  /// Silla de terciopelo teatral: butaca tapizada con respaldo curvo y reposabrazos.
+  void _renderVelvetChair(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final w = size * 0.62;
+    final h = size * 0.58;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + h * 0.44, w * 1.02, h * 0.30, isDecorative);
+
+    // 2. Respaldo y brazos acolchados de caoba oscura
+    final frameRect = Rect.fromCenter(center: Offset(cx, cy), width: w, height: h);
+    final frameRRect = RRect.fromRectAndRadius(frameRect, const Radius.circular(5.0));
+    canvas.drawRRect(frameRRect, Paint()..color = const Color(0xFF4A181E));
+    canvas.drawRRect(frameRRect, outlinePaint);
+
+    // 3. Cojín de terciopelo carmín
+    final cushionRect = Rect.fromCenter(center: Offset(cx, cy + 2), width: w * 0.70, height: h * 0.62);
+    final cushionRRect = RRect.fromRectAndRadius(cushionRect, const Radius.circular(3.5));
+    canvas.drawRRect(cushionRRect, Paint()..color = const Color(0xFF8B1E2F));
+    canvas.drawRRect(cushionRRect, detailPaint);
+
+    canvas.drawCircle(Offset(cx, cy + 2), 2.0, Paint()..color = const Color(0xFF5A121E));
+  }
+
+  /// Banco de jardín: asiento de listones de teca con extremos de forja oscura.
+  void _renderGardenBench(Canvas canvas, double size, Paint outlinePaint, Paint detailPaint, [bool isDecorative = false]) {
+    final cx = size / 2;
+    final cy = size / 2;
+    final w = size * 0.72;
+    final h = size * 0.40;
+    final x = (size - w) / 2;
+    final y = (size - h) / 2;
+
+    // 1. Sombra arrojada
+    _drawDepthShadow(canvas, cx, cy + h * 0.45, w * 1.05, h * 0.35, isDecorative);
+
+    // 2. Extremos de forja de hierro
+    final ironPaint = Paint()..color = const Color(0xFF262524);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(x, y, 4.0, h), const Radius.circular(1.5)),
+      ironPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(x + w - 4.0, y, 4.0, h), const Radius.circular(1.5)),
+      ironPaint,
+    );
+
+    // 3. Listones horizontales de madera
+    final slatH = (h - 6) / 3;
+    final woodPaint = Paint()..color = const Color(0xFFB88554);
+    for (int i = 0; i < 3; i++) {
+      final slatY = y + 1.5 + (i * (slatH + 1.5));
+      final slatRect = Rect.fromLTWH(x + 2.5, slatY, w - 5.0, slatH);
+      canvas.drawRect(slatRect, woodPaint);
+      canvas.drawRect(slatRect, detailPaint);
+    }
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(x, y, w, h), const Radius.circular(2.5)),
+      outlinePaint,
     );
   }
 }

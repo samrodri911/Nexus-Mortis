@@ -63,6 +63,7 @@ class BoardComponent extends Component {
     _furnitureLayerComponent = FurnitureLayerComponent(
       controller: controller,
       metrics: _metrics,
+      geometry: _geometry,
       size: Vector2(_metrics.boardWidth, _metrics.boardHeight),
     )..position = Vector2(_metrics.offsetX, _metrics.offsetY);
     await add(_furnitureLayerComponent);
@@ -126,7 +127,7 @@ class BoardComponent extends Component {
 
     // Actualizar FurnitureLayerComponent (Priority 10)
     _furnitureLayerComponent.position = boardOffset;
-    _furnitureLayerComponent.updateMetrics(_metrics, boardDim);
+    _furnitureLayerComponent.updateMetrics(_metrics, boardDim, _geometry);
 
     // Actualizar WallsOverlayComponent (Priority 20)
     _wallsOverlayComponent.position = boardOffset;

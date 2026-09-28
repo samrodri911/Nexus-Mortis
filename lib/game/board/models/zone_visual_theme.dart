@@ -163,13 +163,26 @@ class ZoneVisualTheme {
         lower.contains('columna') ||
         lower.contains('numism') ||
         lower.contains('escenario') ||
+        lower.contains('palco') ||
+        lower.contains('platea') ||
         lower.contains('teatro')) {
+      final TileType galleryTile;
+      if (lower.contains('galer') || lower.contains('escenario')) {
+        galleryTile = TileType.woodPlanks; // Tarima / parquet pulido
+      } else if (lower.contains('bóveda') || lower.contains('boveda') || lower.contains('egipcia')) {
+        galleryTile = TileType.stone; // Losas macizas de piedra / arenisca
+      } else if (lower.contains('palco') || lower.contains('platea')) {
+        galleryTile = TileType.carpet; // Moqueta / alfombra roja sobria
+      } else {
+        galleryTile = TileType.classicTiles; // Travertino / mármol clásico
+      }
+
       return ZoneVisualTheme(
         archetype: ZoneArchetype.gallery,
         displayName: name ?? 'GALERÍA',
         tintColor: const ui.Color(0xFFF6EFE3), // Travertino / mármol pálido
         accentColor: const ui.Color(0xFF967336), // Bronce clásico suave
-        tileType: TileType.classicTiles,
+        tileType: galleryTile,
         icon: Icons.museum_rounded,
         hasRug: false,
       );
@@ -443,36 +456,36 @@ class ZoneVisualTheme {
     final localCellY = visualCenter.dy % cellHeight;
     final isConstrainedTop = localCellY < cellHeight * 0.28;
 
-    // Margen de seguridad respecto a los muros negros: >= 6px, proporcional a tileSize
-    final safeMargin = max(6.0, cellWidth * 0.09);
-    final maxAvailW = max(30.0, cellWidth - (safeMargin * 2));
+    // Margen de seguridad respecto a los muros negros: >= 8px, proporcional a tileSize
+    final safeMargin = max(8.0, cellWidth * 0.10);
+    final maxAvailW = max(24.0, cellWidth - (safeMargin * 2));
     final maxAvailH = isConstrainedTop
         ? max(12.0, cellHeight * 0.22)
-        : max(30.0, cellHeight - (safeMargin * 2));
+        : max(24.0, cellHeight - (safeMargin * 2));
 
     // 1. Partición estricta entre palabras completas (máximo 3 líneas)
     final lines = isConstrainedTop
         ? words.take(2).toList()
         : _wrapWordsIntoLines(words, maxAvailW, cellWidth);
 
-    // 2. Auto-fit de tamaño de fuente en el rango estricto de 9.0 a 13.0 px
+    // 2. Auto-fit de tamaño de fuente en el rango estricto de 7.5 a 13.0 px
     final longestWordLen = words.map((w) => w.length).reduce(max);
     final longestLineLen = lines.map((l) => l.length).reduce(max);
 
     double fontSize;
     if (isConstrainedTop) {
-      fontSize = (cellWidth * 0.80 / max(longestWordLen, 3)).clamp(7.5, 8.5);
+      fontSize = (maxAvailW * 0.85 / max(longestWordLen, 3)).clamp(7.5, 8.5);
     } else {
-      final widthFactor = (maxAvailW * 0.88) / (longestLineLen * 0.58);
+      final widthFactor = (maxAvailW * 0.90) / (longestLineLen * 0.58);
       final heightFactor = (maxAvailH * 0.88) / (lines.length * 1.25);
       final wordLimit = (maxAvailW * 0.95) / max(longestWordLen, 3);
-      fontSize = min(13.0, min(widthFactor, min(heightFactor, wordLimit))).clamp(9.0, 13.0);
+      fontSize = min(13.0, min(widthFactor, min(heightFactor, wordLimit))).clamp(7.5, 13.0);
     }
 
     final formattedText = lines.join('\n');
-    final outlineStrokeWidth = (cellWidth * 0.038).clamp(2.0, 2.8);
+    final outlineStrokeWidth = (cellWidth * 0.042).clamp(2.5, 3.0);
 
-    // 3. Pasada 1: Contorno exterior negro grueso (2.5px) con remates redondos
+    // 3. Pasada 1: Contorno exterior negro grueso (2.5–3.0px) con remates redondos
     final strokePb = ui.ParagraphBuilder(
       ui.ParagraphStyle(
         textAlign: ui.TextAlign.center,
@@ -493,7 +506,7 @@ class ZoneVisualTheme {
       ))
       ..addText(formattedText);
 
-    final strokeParagraph = strokePb.build()..layout(ui.ParagraphConstraints(width: maxAvailW + 20));
+    final strokeParagraph = strokePb.build()..layout(ui.ParagraphConstraints(width: maxAvailW));
 
     // 4. Pasada 2: Relleno blanco nítido de alto contraste
     final fillPb = ui.ParagraphBuilder(
@@ -511,7 +524,7 @@ class ZoneVisualTheme {
       ))
       ..addText(formattedText);
 
-    final fillParagraph = fillPb.build()..layout(ui.ParagraphConstraints(width: maxAvailW + 20));
+    final fillParagraph = fillPb.build()..layout(ui.ParagraphConstraints(width: maxAvailW));
 
     // 5. Centrado sobre visualCenter
     final textW = fillParagraph.maxIntrinsicWidth;

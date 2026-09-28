@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_mortis/game/board/services/board_layout_metrics.dart';
+import 'package:nexus_mortis/game/board/services/decorative_furniture_evaluator.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
 import 'package:nexus_mortis/game/generator/models/generator_config.dart';
@@ -165,13 +166,63 @@ void main() {
                 reason: 'La alfombra nunca debe solapar un mueble en ($b.row, $b.col)');
           }
         }
+
+        // 5. Verificación Estricta de Mobiliario Decorativo (V3.5)
+        const decoEvaluator = DecorativeFurnitureEvaluator();
+        final decoItems = decoEvaluator.evaluate(
+          rows: dim.rows,
+          columns: dim.cols,
+          zones: puzzle.zones,
+          blockedCells: blocked,
+          zoneVisualCenters: geom.zoneVisualCenters,
+          zoneRugRects: geom.zoneRugRects,
+          theme: theme,
+          cellWidth: geom.cellWidth,
+          cellHeight: geom.cellHeight,
+        );
+
+        for (final item in decoItems) {
+          // A. Nunca sobre celda bloqueada por objeto lógico
+          expect(blocked.contains(item.position), isFalse,
+              reason: 'Mueble decorativo en ${item.position} no debe coincidir con celda bloqueada');
+
+          // B. Nunca sobre la celda que contiene el nombre de la habitación
+          final center = geom.zoneVisualCenters[item.zoneId];
+          if (center != null) {
+            final col = (center.dx / geom.cellWidth).floor();
+            final row = (center.dy / geom.cellHeight).floor();
+            expect(item.position == CellPosition(row, col), isFalse,
+                reason: 'Mueble decorativo en ${item.position} no debe solapar el nombre de la habitación');
+          }
+
+          // C. Nunca sobre una alfombra
+          final rugRect = geom.zoneRugRects[item.zoneId];
+          if (rugRect != null) {
+            final cRect = ui.Rect.fromLTWH(
+              item.position.col * geom.cellWidth,
+              item.position.row * geom.cellHeight,
+              geom.cellWidth,
+              geom.cellHeight,
+            );
+            expect(rugRect.overlaps(cRect), isFalse,
+                reason: 'Mueble decorativo en ${item.position} no debe solapar alfombra');
+          }
+        }
+
+        // D. Densidad total por habitación <= 2 elementos (lógicos + decorativos)
+        for (final zone in puzzle.zones) {
+          final logicalCount = zone.cells.where(blocked.contains).length;
+          final decoCount = decoItems.where((d) => d.zoneId == zone.id).length;
+          expect(logicalCount + decoCount, lessThanOrEqualTo(2),
+              reason: 'Habitación ${zone.name} supera el límite de densidad total de 2 muebles');
+        }
       }
     }
 
     // ignore: avoid_print
     print('''
 ═══════════════════════════════════════════════════════════════════════════════
-AUDITORÍA VISUAL INTEGRAL NEXUS MORTIS V3.4 (4x4, 5x4, 5x5, 6x5)
+AUDITORÍA VISUAL INTEGRAL NEXUS MORTIS V3.5 (4x4, 5x4, 5x5, 6x5)
 ═══════════════════════════════════════════════════════════════════════════════
 Casos Auditados: $totalCasesEvaluated
 Distribución de Temas:
@@ -184,6 +235,9 @@ Frecuencia de Alfombras:
   - Casos con 1 alfombra de acento: $casesWithOneRug
   - Casos con 2 alfombras (mapas grandes): $casesWithTwoRugs
   - Total Alfombras Dibujadas: $totalRugsRendered
+Mobiliario Decorativo V3.5:
+  - Densidad controlada <= 2 muebles por habitación en el 100% de los casos.
+  - Cero colisiones con celdas lógicas, nombres de habitación y alfombras.
 Todas las verificaciones geométricas, de muros, muebles y texto superadas con éxito.
 ═══════════════════════════════════════════════════════════════════════════════
 ''');

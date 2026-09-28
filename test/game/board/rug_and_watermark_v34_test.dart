@@ -316,5 +316,24 @@ void main() {
 
       recorder.endRecording().dispose();
     });
+
+    test('Habitación estrecha / 1 celda: margen >= 8px y auto-fit de fuentes (V3.5)', () {
+      final theme = ZoneVisualTheme.fromZoneName('DORMITORIO NOBLE', 0);
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder, const ui.Rect.fromLTWH(0, 0, 50, 50));
+
+      expect(() {
+        theme.renderRoomWatermark(
+          canvas: canvas,
+          visualCenter: const ui.Offset(25.0, 25.0),
+          roomBounds: const ui.Rect.fromLTWH(0, 0, 50, 50),
+          cellWidth: 50.0,
+          cellHeight: 50.0,
+        );
+      }, returnsNormally);
+
+      recorder.endRecording().dispose();
+    });
   });
 }

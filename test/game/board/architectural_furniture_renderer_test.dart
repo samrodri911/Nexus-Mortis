@@ -78,5 +78,41 @@ void main() {
       final picture = recorder.endRecording();
       picture.dispose();
     });
+
+    test('Renderiza todos los nuevos tipos de mobiliario temático (V3.5) en modo normal y decorativo', () {
+      final thematicObjectIds = [
+        'obj_vitrina_museo',
+        'obj_caballete_arte',
+        'obj_sarcofago_egipcio',
+        'obj_anfora_griega',
+        'obj_pedestal_clasico',
+        'obj_atril_musica',
+        'obj_foco_escena',
+        'obj_silla_terciopelo_opera',
+        'obj_banco_jardin',
+      ];
+
+      for (final objId in thematicObjectIds) {
+        for (final isDeco in [false, true]) {
+          final recorder = ui.PictureRecorder();
+          final canvas = ui.Canvas(recorder);
+
+          expect(
+            () => renderer.render(
+              canvas: canvas,
+              objectId: objId,
+              cellRect: const ui.Rect.fromLTWH(0, 0, 60, 60),
+              tileSize: 60,
+              isDecorative: isDeco,
+            ),
+            returnsNormally,
+            reason: 'Fallo al renderizar $objId (isDecorative: $isDeco)',
+          );
+
+          final picture = recorder.endRecording();
+          picture.dispose();
+        }
+      }
+    });
   });
 }
