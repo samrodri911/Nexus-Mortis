@@ -7,6 +7,7 @@ import 'package:nexus_mortis/game/board/controllers/board_controller.dart';
 import 'package:nexus_mortis/game/board/services/board_layout_metrics.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/visual/services/visual_map_builder.dart';
 
 /// Componente raíz del tablero espacial.
 ///
@@ -51,10 +52,29 @@ class BoardComponent extends Component {
 
     _geometry = _calculateGeometry(_metrics, rows, cols);
 
+    // Generar plan visual procedural UNA SOLA VEZ por caso.
+    // El seed se genera de datos estables del caso (no Dart hashCode).
+    final blocked = <CellPosition>{};
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        if (controller.cells[r][c].isBlocked) {
+          blocked.add(CellPosition(r, c));
+        }
+      }
+    }
+    final caseSeed = _buildCaseSeed(rows, cols, controller.zones.length);
+    final visualPlan = VisualMapBuilder.build(
+      zones: controller.zones,
+      blockedCells: blocked,
+      caseSeed: caseSeed,
+      theme: controller.zoneTheme,
+    );
+
     // 1. Capa 0: Plano arquitectónico continuo (suelos, alfombras, ambientación, nombres)
     _floorPlanComponent = FloorPlanComponent(
       controller: controller,
       geometry: _geometry,
+      visualPlan: visualPlan,
       size: Vector2(_metrics.boardWidth, _metrics.boardHeight),
     )..position = Vector2(_metrics.offsetX, _metrics.offsetY);
     await add(_floorPlanComponent);
@@ -64,6 +84,7 @@ class BoardComponent extends Component {
       controller: controller,
       metrics: _metrics,
       geometry: _geometry,
+      visualPlan: visualPlan,
       size: Vector2(_metrics.boardWidth, _metrics.boardHeight),
     )..position = Vector2(_metrics.offsetX, _metrics.offsetY);
     await add(_furnitureLayerComponent);
@@ -168,5 +189,17 @@ class BoardComponent extends Component {
 
   void _onCellTapped(int row, int col) {
     controller.toggleMark(row, col);
+  }
+
+  /// Genera un seed determinista a partir de datos estables del caso.
+  ///
+  /// NO usa `hashCode` de Dart (no garantizado multiplataforma).
+  /// Completamente independiente del RNG del puzzle.
+  static int _buildCaseSeed(int rows, int cols, int zoneCount) {
+    int seed = 0x5F3759DF; // Constante arbitraria determinista
+    seed = ((seed * 31) + rows) & 0x7FFFFFFF;
+    seed = ((seed * 37) + cols) & 0x7FFFFFFF;
+    seed = ((seed * 41) + zoneCount) & 0x7FFFFFFF;
+    return seed;
   }
 }

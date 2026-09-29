@@ -8,7 +8,9 @@ import 'package:nexus_mortis/game/board/services/board_layout_metrics.dart';
 import 'package:nexus_mortis/game/board/services/decorative_furniture_evaluator.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/visual/models/visual_map_plan.dart';
 import 'package:nexus_mortis/game/visual/services/atlas_manager.dart';
+import 'package:nexus_mortis/game/visual/services/decoration_catalog.dart';
 import 'package:nexus_mortis/game/visual/services/furniture_catalog.dart';
 import 'package:nexus_mortis/game/visual/utils/sprite_layout_helper.dart';
 
@@ -31,6 +33,7 @@ class FurnitureLayerComponent extends PositionComponent {
     required this.controller,
     required this.metrics,
     this.geometry,
+    this.visualPlan,
     required super.size,
   }) {
     priority = 10;
@@ -39,6 +42,7 @@ class FurnitureLayerComponent extends PositionComponent {
   final BoardController controller;
   BoardLayoutMetrics metrics;
   ZoneGeometryResult? geometry;
+  final VisualMapPlan? visualPlan;
 
   static const _furnitureRenderer = ArchitecturalFurnitureRenderer();
   static const _decorativeEvaluator = DecorativeFurnitureEvaluator();
@@ -106,30 +110,50 @@ class FurnitureLayerComponent extends PositionComponent {
     }
 
     // 1. Mobiliario decorativo temático sutil (capa base de mobiliario)
-    final decorativeItems = _decorativeEvaluator.evaluate(
-      rows: rows,
-      columns: cols,
-      zones: controller.zones,
-      blockedCells: blocked,
-      zoneVisualCenters: geometry?.zoneVisualCenters ?? const {},
-      zoneRugRects: geometry?.zoneRugRects ?? const {},
-      theme: controller.zoneTheme,
-      cellWidth: metrics.tileSize,
-      cellHeight: metrics.tileSize,
-    );
+    // Si hay VisualMapPlan, sus decoraciones son la fuente de verdad visual.
+    // De lo contrario, se usa el evaluador decorativo existente como fallback.
+    if (visualPlan != null) {
+      for (final room in visualPlan!.rooms.values) {
+        for (final placement in room.decorations) {
+          final pos = metrics.getCellPosition(placement.row, placement.col);
+          final localX = pos.x - metrics.offsetX;
+          final localY = pos.y - metrics.offsetY;
 
-    for (final item in decorativeItems) {
-      final pos = metrics.getCellPosition(item.position.row, item.position.col);
-      final localX = pos.x - metrics.offsetX;
-      final localY = pos.y - metrics.offsetY;
-
-      _renderFurnitureItem(
-        canvas: canvas,
-        objectId: item.objectId,
-        cellRect: Rect.fromLTWH(localX, localY, metrics.tileSize, metrics.tileSize),
-        tileSize: metrics.tileSize,
-        isDecorative: true,
+          _renderFurnitureItem(
+            canvas: canvas,
+            objectId: placement.objectId,
+            cellRect: Rect.fromLTWH(localX, localY, metrics.tileSize, metrics.tileSize),
+            tileSize: metrics.tileSize,
+            isDecorative: true,
+          );
+        }
+      }
+    } else {
+      final decorativeItems = _decorativeEvaluator.evaluate(
+        rows: rows,
+        columns: cols,
+        zones: controller.zones,
+        blockedCells: blocked,
+        zoneVisualCenters: geometry?.zoneVisualCenters ?? const {},
+        zoneRugRects: geometry?.zoneRugRects ?? const {},
+        theme: controller.zoneTheme,
+        cellWidth: metrics.tileSize,
+        cellHeight: metrics.tileSize,
       );
+
+      for (final item in decorativeItems) {
+        final pos = metrics.getCellPosition(item.position.row, item.position.col);
+        final localX = pos.x - metrics.offsetX;
+        final localY = pos.y - metrics.offsetY;
+
+        _renderFurnitureItem(
+          canvas: canvas,
+          objectId: item.objectId,
+          cellRect: Rect.fromLTWH(localX, localY, metrics.tileSize, metrics.tileSize),
+          tileSize: metrics.tileSize,
+          isDecorative: true,
+        );
+      }
     }
 
     // 2. Objetos lógicos del caso (capa principal con contornos nítidos)
@@ -172,7 +196,8 @@ class FurnitureLayerComponent extends PositionComponent {
     required bool isDecorative,
   }) {
     // 1. Intentar resolver sprite desde FurnitureCatalog
-    final entry = FurnitureCatalog.instance.findEntryForLogicalObject(objectId);
+    final entry = FurnitureCatalog.instance
+        .findEntryForLogicalObject(objectId, label: objectLabel);
     if (entry != null) {
       final sprite =
           AtlasManager.instance.getSprite(entry.atlasId, entry.regionName);
@@ -184,25 +209,32 @@ class FurnitureLayerComponent extends PositionComponent {
           fillRatio: entry.defaultScaleRatio,
         );
 
-        // Sombra elíptica suave en la base del mueble para integrarlo al plano
-        final shadowRect = Rect.fromCenter(
-          center: Offset(
-            destRect.center.dx,
-            destRect.bottom - (destRect.height * 0.05),
-          ),
-          width: destRect.width * 0.72,
-          height: destRect.height * 0.18,
-        );
-        canvas.drawOval(
-          shadowRect,
-          Paint()..color = const Color(0x28000000),
-        );
-
         final paint = isDecorative
             ? (Paint()..color = const Color(0xDDFFFFFF))
             : null;
         sprite.renderRect(canvas, destRect, overridePaint: paint);
         return;
+      }
+    }
+
+    // 1b. Si es decorativo, intentar resolver desde DecorationCatalog
+    if (isDecorative) {
+      final decEntry =
+          DecorationCatalog.instance.findEntryForDecoration(objectId);
+      if (decEntry != null) {
+        final sprite = AtlasManager.instance
+            .getSprite(decEntry.atlasId, decEntry.regionName);
+        if (sprite != null) {
+          final destRect = SpriteLayoutHelper.calculateDestRect(
+            cellRect: cellRect,
+            srcWidth: sprite.srcSize.x,
+            srcHeight: sprite.srcSize.y,
+            fillRatio: decEntry.defaultScaleRatio,
+          );
+          final paint = Paint()..color = const Color(0xDDFFFFFF);
+          sprite.renderRect(canvas, destRect, overridePaint: paint);
+          return;
+        }
       }
     }
 

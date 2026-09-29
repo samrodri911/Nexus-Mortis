@@ -155,28 +155,33 @@ class FurnitureCatalog {
   /// Lista de todas las entradas registradas.
   List<FurnitureCatalogEntry> get allEntries => _entries.values.toList();
 
-  /// Resuelve una representación visual opcional de sprite a partir del identificador
-  /// de un objeto lógico existente, manteniendo total compatibilidad con el sistema actual.
-  FurnitureCatalogEntry? findEntryForLogicalObject(String objectId) {
-    final lower = objectId.toLowerCase();
-    if (lower.contains('nevera') || lower.contains('frigor') || lower.contains('fridge')) {
-      return getEntry('refrigerator_01');
-    }
-    if (lower.contains('fregadero') || lower.contains('lavabo') || lower.contains('sink')) {
-      return getEntry('sink_01');
-    }
-    if (lower.contains('cocina') || lower.contains('horno') || lower.contains('stove')) {
-      return getEntry('stove_01');
-    }
-    if (lower.contains('aparador') || lower.contains('alacena') || lower.contains('cabinet')) {
-      return getEntry('cabinet_01');
-    }
-    if (lower.contains('mesa') && !lower.contains('noche')) {
-      return lower.contains('redond') ? getEntry('table_round_01') : getEntry('table_01');
-    }
-    if (lower.contains('silla') || lower.contains('chair')) {
+  /// Resuelve una representación visual opcional de sprite a partir de la identidad
+  /// real de un objeto lógico existente, manteniendo total compatibilidad con el sistema actual.
+  ///
+  /// Regla de diseño:
+  /// - Los sprites se adaptan a las identidades lógicas existentes; las identidades lógicas
+  ///   NO se modifican para adaptarse a los sprites.
+  /// - Solo 'silla'/'chair' mapea a 'chair_01' y 'mesa'/'table' mapea a 'table_01'.
+  /// - Si no hay correspondencia directa en los objetos del juego, retorna null
+  ///   para activar el fallback a ArchitecturalFurnitureRenderer.
+  FurnitureCatalogEntry? findEntryForLogicalObject(String objectId, {String? label}) {
+    final lowerId = objectId.toLowerCase();
+    final lowerLabel = label?.toLowerCase() ?? '';
+    final text = '$lowerId $lowerLabel';
+
+    if (text.contains('silla') || text.contains('chair')) {
       return getEntry('chair_01');
     }
-    return getEntry(objectId);
+    if (text.contains('mesa') && !text.contains('noche')) {
+      return getEntry('table_01');
+    }
+
+    // Si se consulta directamente por el ID de un sprite registrado en el catálogo
+    if (hasEntry(objectId)) {
+      return getEntry(objectId);
+    }
+
+    return null;
   }
 }
+

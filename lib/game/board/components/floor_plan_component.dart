@@ -6,6 +6,7 @@ import 'package:nexus_mortis/game/board/controllers/board_controller.dart';
 import 'package:nexus_mortis/game/board/models/zone_visual_theme.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/visual/models/visual_map_plan.dart';
 
 /// Componente responsable del plano arquitectónico base del tablero.
 ///
@@ -21,12 +22,14 @@ class FloorPlanComponent extends PositionComponent {
     required this.controller,
     required super.size,
     this.geometry,
+    this.visualPlan,
   }) {
     priority = 0;
   }
 
   final BoardController controller;
   ZoneGeometryResult? geometry;
+  final VisualMapPlan? visualPlan;
   static const _geometryBuilder = ZoneGeometryBuilder();
 
   ui.Picture? _cachedPicture;
@@ -92,11 +95,27 @@ class FloorPlanComponent extends PositionComponent {
       theme: controller.zoneTheme,
     );
 
-    // 2. Mapear temas visuales por zona
+    // 2. Mapear temas visuales por zona (incorporando VisualMapPlan si disponible)
     final themes = <String, ZoneVisualTheme>{};
     for (int i = 0; i < controller.zones.length; i++) {
       final zone = controller.zones[i];
-      themes[zone.id] = ZoneVisualTheme.fromZoneName(zone.name, i);
+      final baseTheme = ZoneVisualTheme.fromZoneName(zone.name, i);
+      final roomPlan = visualPlan?.forZone(zone.id);
+
+      if (roomPlan != null) {
+        // Sobreescribir suelo y alfombra con decisiones del plan visual
+        themes[zone.id] = ZoneVisualTheme(
+          archetype: baseTheme.archetype,
+          displayName: baseTheme.displayName,
+          tintColor: baseTheme.tintColor,
+          accentColor: baseTheme.accentColor,
+          tileType: roomPlan.floorTileType,
+          icon: baseTheme.icon,
+          hasRug: roomPlan.hasRug,
+        );
+      } else {
+        themes[zone.id] = baseTheme;
+      }
     }
 
     // 3. Grabar dibujo estático

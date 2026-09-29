@@ -50,18 +50,29 @@ void main() {
       }
     });
 
-    test('findEntryForLogicalObject resolves representations correctly', () {
-      expect(catalog.findEntryForLogicalObject('nevera')?.id, 'refrigerator_01');
-      expect(catalog.findEntryForLogicalObject('Nevera de acero')?.id, 'refrigerator_01');
-      expect(catalog.findEntryForLogicalObject('fregadero_cocina')?.id, 'sink_01');
-      expect(catalog.findEntryForLogicalObject('cocina_gas')?.id, 'stove_01');
-      expect(catalog.findEntryForLogicalObject('horno_electrico')?.id, 'stove_01');
-      expect(catalog.findEntryForLogicalObject('alacena_roble')?.id, 'cabinet_01');
-      expect(catalog.findEntryForLogicalObject('mesa_comedor')?.id, 'table_01');
-      expect(catalog.findEntryForLogicalObject('mesa_redonda')?.id, 'table_round_01');
-      expect(catalog.findEntryForLogicalObject('silla_madera')?.id, 'chair_01');
+    test('findEntryForLogicalObject resolves existing objects and falls back correctly', () {
+      // Objetos lógicos reales que tienen sprite
+      expect(catalog.findEntryForLogicalObject('obj_silla')?.id, 'chair_01');
+      expect(catalog.findEntryForLogicalObject('silla_madera', label: 'Silla')?.id, 'chair_01');
+      expect(catalog.findEntryForLogicalObject('obj_mesa')?.id, 'table_01');
+      expect(catalog.findEntryForLogicalObject('mesa_comedor', label: 'Mesa')?.id, 'table_01');
 
-      // Unrelated or unmapped object returns null or direct match if registered
+      // Consulta directa por ID de catálogo
+      expect(catalog.findEntryForLogicalObject('chair_01')?.id, 'chair_01');
+      expect(catalog.findEntryForLogicalObject('table_01')?.id, 'table_01');
+      expect(catalog.findEntryForLogicalObject('table_round_01')?.id, 'table_round_01');
+      expect(catalog.findEntryForLogicalObject('cabinet_01')?.id, 'cabinet_01');
+      expect(catalog.findEntryForLogicalObject('refrigerator_01')?.id, 'refrigerator_01');
+      expect(catalog.findEntryForLogicalObject('stove_01')?.id, 'stove_01');
+      expect(catalog.findEntryForLogicalObject('sink_01')?.id, 'sink_01');
+
+      // Objetos sin correspondencia en los 7 sprites de prueba retornan null para activar fallback
+      expect(catalog.findEntryForLogicalObject('obj_cama'), isNull);
+      expect(catalog.findEntryForLogicalObject('obj_librero'), isNull);
+      expect(catalog.findEntryForLogicalObject('obj_armario'), isNull);
+      expect(catalog.findEntryForLogicalObject('obj_escritorio'), isNull);
+      expect(catalog.findEntryForLogicalObject('obj_caja'), isNull);
+      expect(catalog.findEntryForLogicalObject('obj_lampara'), isNull);
       expect(catalog.findEntryForLogicalObject('sarcofago'), isNull);
       expect(catalog.findEntryForLogicalObject('vitrina'), isNull);
     });
