@@ -1,7 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nexus_mortis/game/board/components/board_component.dart';
 import 'package:nexus_mortis/game/board/components/cell_component.dart';
 import 'package:nexus_mortis/game/board/components/floor_plan_component.dart';
 import 'package:nexus_mortis/game/board/components/furniture_layer_component.dart';
@@ -12,11 +11,9 @@ import 'package:nexus_mortis/game/board/models/cell_data.dart';
 import 'package:nexus_mortis/game/board/models/zone_visual_theme.dart';
 import 'package:nexus_mortis/game/board/services/board_layout_metrics.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
-import 'package:nexus_mortis/game/clues/models/object_data.dart';
 import 'package:nexus_mortis/game/clues/models/suspect_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/case_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
-import 'package:nexus_mortis/game/puzzles/models/placed_object_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/puzzle_difficulty.dart';
 import 'package:nexus_mortis/game/puzzles/models/solution_data.dart';
 import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
@@ -63,7 +60,7 @@ void main() {
       final walls = WallsOverlayComponent(geometry: geom, size: Vector2(300, 300));
       final cell = CellComponent(
         cellData: CellData(row: 0, col: 0, type: CellType.free),
-        onTapped: (_, __) {},
+        onTapped: (_, _) {},
         getActiveSuspectId: () => null,
         allSuspects: const [],
         position: Vector2.zero(),
@@ -120,7 +117,7 @@ void main() {
 
       final cell = CellComponent(
         cellData: blockedCellData,
-        onTapped: (_, __) {},
+        onTapped: (_, _) {},
         getActiveSuspectId: () => null,
         allSuspects: const [],
         position: Vector2.zero(),

@@ -1,18 +1,24 @@
-import 'package:flame/sprite.dart';
 import 'package:flutter/material.dart';
+import 'package:nexus_mortis/game/visual/models/texture_atlas.dart';
 import 'package:nexus_mortis/game/visual/services/atlas_manager.dart';
+import 'package:nexus_mortis/game/visual/services/atlas_registry.dart';
 import 'package:nexus_mortis/game/visual/services/decoration_catalog.dart';
 import 'package:nexus_mortis/game/visual/services/floor_catalog.dart';
 import 'package:nexus_mortis/game/visual/services/furniture_catalog.dart';
-import 'package:nexus_mortis/game/visual/utils/sprite_layout_helper.dart';
+import 'package:nexus_mortis/game/visual/widgets/atlas_diagnostics_widget.dart';
+import 'package:nexus_mortis/game/visual/widgets/atlas_full_image_viewer.dart';
+import 'package:nexus_mortis/game/visual/widgets/board_visual_preview_tab.dart';
+import 'package:nexus_mortis/game/visual/widgets/sprite_card_widget.dart';
 
-/// Widget de desarrollo aislado para inspeccionar y validar visualmente
-/// todos los sprites y configuraciones registrados en los catálogos visuales.
+/// Widget de desarrollo integral para inspeccionar y validar visualmente
+/// todos los sprites, atlas y configuraciones registrados en Nexus Mortis.
 ///
-/// Dispone de 3 pestañas:
+/// Dispone de 5 pestañas:
 /// 1. Mobiliario ([FurnitureCatalog])
 /// 2. Decoración ([DecorationCatalog])
 /// 3. Suelos ([FloorCatalog])
+/// 4. Hoja & Diagnóstico (Visor completo de atlas y validación de recortes)
+/// 5. Tablero (Previsualización procedural mini del tablero)
 class AtlasPreviewWidget extends StatefulWidget {
   const AtlasPreviewWidget({super.key});
 
@@ -22,15 +28,20 @@ class AtlasPreviewWidget extends StatefulWidget {
 
 class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
   late Future<void> _loadFuture;
+  String _selectedAtlasId = FurnitureCatalog.kitchenAtlasId;
 
   @override
   void initState() {
     super.initState();
-    _loadFuture = _loadAtlas();
+    if (AtlasManager.instance.isLoaded(_selectedAtlasId)) {
+      _loadFuture = Future.value();
+    } else {
+      _loadFuture = _loadAtlases();
+    }
   }
 
-  Future<void> _loadAtlas() async {
-    await AtlasManager.instance.loadAtlas(FurnitureCatalog.kitchenAtlas);
+  Future<void> _loadAtlases() async {
+    await AtlasRegistry.instance.preloadAll(AtlasManager.instance);
   }
 
   @override
@@ -51,14 +62,42 @@ class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
           );
         }
 
+        final loadedAtlas = AtlasManager.instance.getAtlas(_selectedAtlasId);
+        final availableAtlases = AtlasManager.instance.allLoadedAtlases;
+
         return DefaultTabController(
-          length: 3,
+          length: 5,
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Nexus Mortis — Catálogos Visuales'),
               backgroundColor: const Color(0xFF1B1A17),
               foregroundColor: const Color(0xFFEDE8DF),
+              actions: [
+                if (availableAtlases.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: DropdownButton<String>(
+                      value: _selectedAtlasId,
+                      dropdownColor: const Color(0xFF262422),
+                      style: const TextStyle(color: Color(0xFFEDE8DF), fontSize: 13),
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.layers_rounded, color: Color(0xFFB55D44)),
+                      items: availableAtlases.map((atlas) {
+                        return DropdownMenuItem(
+                          value: atlas.definition.id,
+                          child: Text(atlas.definition.id),
+                        );
+                      }).toList(),
+                      onChanged: (newId) {
+                        if (newId != null) {
+                          setState(() => _selectedAtlasId = newId);
+                        }
+                      },
+                    ),
+                  ),
+              ],
               bottom: const TabBar(
+                isScrollable: true,
                 indicatorColor: Color(0xFFB55D44),
                 labelColor: Color(0xFFEDE8DF),
                 unselectedLabelColor: Color(0xFFA89F91),
@@ -66,6 +105,8 @@ class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
                   Tab(text: 'Mobiliario'),
                   Tab(text: 'Decoración'),
                   Tab(text: 'Suelos'),
+                  Tab(text: 'Hoja & Diagnóstico'),
+                  Tab(text: 'Tablero'),
                 ],
               ),
             ),
@@ -75,6 +116,15 @@ class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
                 _buildFurnitureTab(),
                 _buildDecorationTab(),
                 _buildFloorsTab(),
+                loadedAtlas != null
+                    ? _buildDiagnosticsTab(loadedAtlas)
+                    : const Center(
+                        child: Text(
+                          'No hay atlas seleccionado cargado.',
+                          style: TextStyle(color: Color(0xFFA89F91)),
+                        ),
+                      ),
+                const BoardVisualPreviewTab(),
               ],
             ),
           ),
@@ -100,10 +150,10 @@ class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
           entry.atlasId,
           entry.regionName,
         );
-        final region =
-            FurnitureCatalog.kitchenAtlas.getRegion(entry.regionName);
+        final atlas = AtlasRegistry.instance.getAtlas(entry.atlasId);
+        final region = atlas?.getRegion(entry.regionName);
 
-        return _SpriteCard(
+        return SpriteCardWidget(
           title: entry.id,
           subtitle:
               '${region?.width.toInt() ?? 0}×${region?.height.toInt() ?? 0} px • ${entry.category}',
@@ -139,7 +189,7 @@ class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
           entry.atlasId,
           entry.regionName,
         );
-        return _SpriteCard(
+        return SpriteCardWidget(
           title: entry.id,
           subtitle: entry.category,
           sprite: sprite,
@@ -209,71 +259,28 @@ class _AtlasPreviewWidgetState extends State<AtlasPreviewWidget> {
       },
     );
   }
-}
 
-class _SpriteCard extends StatelessWidget {
-  const _SpriteCard({
-    required this.title,
-    required this.subtitle,
-    required this.sprite,
-  });
-
-  final String title;
-  final String subtitle;
-  final Sprite? sprite;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF33302B),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF4A453E)),
-      ),
-      padding: const EdgeInsets.all(12),
+  Widget _buildDiagnosticsTab(LoadedAtlas loadedAtlas) {
+    return DefaultTabController(
+      length: 2,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          const TabBar(
+            indicatorColor: Color(0xFFB55D44),
+            labelColor: Color(0xFFEDE8DF),
+            unselectedLabelColor: Color(0xFFA89F91),
+            tabs: [
+              Tab(text: 'Diagnóstico Geométrico'),
+              Tab(text: 'Visor de Imagen'),
+            ],
+          ),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1C1A),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF3D3833)),
-              ),
-              child: sprite != null
-                  ? CustomPaint(
-                      painter: _SpritePreviewPainter(sprite!),
-                    )
-                  : const Center(
-                      child: Text(
-                        'No sprite',
-                        style: TextStyle(color: Colors.redAccent, fontSize: 12),
-                      ),
-                    ),
+            child: TabBarView(
+              children: [
+                AtlasDiagnosticsWidget(loadedAtlas: loadedAtlas),
+                AtlasFullImageViewer(loadedAtlas: loadedAtlas),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFFEDE8DF),
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: Color(0xFFA89F91),
-              fontSize: 11,
-            ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -281,25 +288,3 @@ class _SpriteCard extends StatelessWidget {
   }
 }
 
-class _SpritePreviewPainter extends CustomPainter {
-  _SpritePreviewPainter(this.sprite);
-
-  final Sprite sprite;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cellRect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final destRect = SpriteLayoutHelper.calculateDestRect(
-      cellRect: cellRect,
-      srcWidth: sprite.srcSize.x,
-      srcHeight: sprite.srcSize.y,
-      fillRatio: 0.75,
-    );
-
-    sprite.renderRect(canvas, destRect);
-  }
-
-  @override
-  bool shouldRepaint(_SpritePreviewPainter oldDelegate) =>
-      oldDelegate.sprite != sprite;
-}

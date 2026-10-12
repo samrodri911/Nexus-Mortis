@@ -139,6 +139,52 @@ class FurnitureCatalog {
       category: 'plumbing',
       defaultScaleRatio: 0.75,
     ));
+
+    // Muebles de dormitorio (furniture_bedroom)
+    register(const FurnitureCatalogEntry(
+      id: 'bed_01',
+      atlasId: 'furniture_bedroom',
+      regionName: 'bedroom_01',
+      category: 'bed',
+      defaultScaleRatio: 0.78,
+    ));
+    register(const FurnitureCatalogEntry(
+      id: 'wardrobe_01',
+      atlasId: 'furniture_bedroom',
+      regionName: 'bedroom_05',
+      category: 'wardrobe',
+      defaultScaleRatio: 0.75,
+    ));
+
+    // Muebles de biblioteca / estudio (furniture_library)
+    register(const FurnitureCatalogEntry(
+      id: 'bookshelf_01',
+      atlasId: 'furniture_library',
+      regionName: 'library_01',
+      category: 'bookshelf',
+      defaultScaleRatio: 0.76,
+    ));
+    register(const FurnitureCatalogEntry(
+      id: 'desk_01',
+      atlasId: 'furniture_library',
+      regionName: 'library_02',
+      category: 'desk',
+      defaultScaleRatio: 0.76,
+    ));
+    register(const FurnitureCatalogEntry(
+      id: 'lamp_01',
+      atlasId: 'furniture_library',
+      regionName: 'library_11',
+      category: 'lamp',
+      defaultScaleRatio: 0.70,
+    ));
+    register(const FurnitureCatalogEntry(
+      id: 'box_01',
+      atlasId: 'furniture_library',
+      regionName: 'library_13',
+      category: 'box',
+      defaultScaleRatio: 0.70,
+    ));
   }
 
   /// Registra una nueva entrada en el catálogo.
@@ -174,6 +220,24 @@ class FurnitureCatalog {
     }
     if (text.contains('mesa') && !text.contains('noche')) {
       return getEntry('table_01');
+    }
+    if (text.contains('cama') || text.contains('bed')) {
+      return getEntry('bed_01');
+    }
+    if (text.contains('librero') || text.contains('bookshelf') || text.contains('estanteria')) {
+      return getEntry('bookshelf_01');
+    }
+    if (text.contains('escritorio') || text.contains('desk')) {
+      return getEntry('desk_01');
+    }
+    if (text.contains('armario') || text.contains('wardrobe') || text.contains('closet')) {
+      return getEntry('wardrobe_01');
+    }
+    if (text.contains('lampara') || text.contains('lámpara') || text.contains('lamp')) {
+      return getEntry('lamp_01');
+    }
+    if (text.contains('caja') || text.contains('box') || text.contains('baul') || text.contains('baúl')) {
+      return getEntry('box_01');
     }
 
     // Si se consulta directamente por el ID de un sprite registrado en el catálogo

@@ -55,19 +55,35 @@ class BoardComponent extends Component {
     // Generar plan visual procedural UNA SOLA VEZ por caso.
     // El seed se genera de datos estables del caso (no Dart hashCode).
     final blocked = <CellPosition>{};
+    final logicalObjectIds = <String>{};
     for (int r = 0; r < rows; r++) {
       for (int c = 0; c < cols; c++) {
-        if (controller.cells[r][c].isBlocked) {
+        final cell = controller.cells[r][c];
+        if (cell.isBlocked) {
           blocked.add(CellPosition(r, c));
+          if (cell.objectId != null && cell.objectId!.isNotEmpty) {
+            logicalObjectIds.add(cell.objectId!);
+          }
         }
       }
     }
+
+    // Identificar celdas reservadas para los rótulos de nombres de zona
+    final zoneNameCells = <String, CellPosition>{};
+    for (final entry in _geometry.zoneVisualCenters.entries) {
+      final col = (entry.value.dx / _geometry.cellWidth).floor().clamp(0, cols - 1);
+      final row = (entry.value.dy / _geometry.cellHeight).floor().clamp(0, rows - 1);
+      zoneNameCells[entry.key] = CellPosition(row, col);
+    }
+
     final caseSeed = _buildCaseSeed(rows, cols, controller.zones.length);
     final visualPlan = VisualMapBuilder.build(
       zones: controller.zones,
       blockedCells: blocked,
       caseSeed: caseSeed,
       theme: controller.zoneTheme,
+      logicalObjectIds: logicalObjectIds,
+      zoneNameCells: zoneNameCells,
     );
 
     // 1. Capa 0: Plano arquitectónico continuo (suelos, alfombras, ambientación, nombres)

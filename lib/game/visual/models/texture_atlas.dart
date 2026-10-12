@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flame/extensions.dart';
 import 'package:flame/sprite.dart';
+import 'package:nexus_mortis/game/visual/models/atlas_validation_result.dart';
 import 'package:nexus_mortis/game/visual/models/sprite_region.dart';
 
 /// Definición e índice de regiones de un atlas de texturas.
@@ -62,5 +63,64 @@ class LoadedAtlas {
 
     _spriteCache[regionName] = sprite;
     return sprite;
+  }
+
+  /// Realiza un diagnóstico geométrico completo de las regiones respecto a la imagen decodificada.
+  AtlasValidationResult validate() {
+    final errors = <String>[];
+    final warnings = <String>[];
+    final valid = <String>[];
+    final imgW = image.width.toDouble();
+    final imgH = image.height.toDouble();
+
+    if (imgW <= 0 || imgH <= 0) {
+      errors.add(
+        'La imagen del atlas tiene dimensiones no válidas (${image.width}×${image.height}).',
+      );
+    }
+
+    for (final region in definition.regions.values) {
+      bool regionHasError = false;
+
+      if (region.width <= 0 || region.height <= 0) {
+        errors.add(
+          'Región "${region.name}": dimensiones no positivas (${region.width}×${region.height}).',
+        );
+        regionHasError = true;
+      }
+      if (region.x < 0 || region.y < 0) {
+        errors.add(
+          'Región "${region.name}": coordenadas de origen negativas (${region.x}, ${region.y}).',
+        );
+        regionHasError = true;
+      }
+      if (region.x + region.width > imgW || region.y + region.height > imgH) {
+        errors.add(
+          'Región "${region.name}": excede los límites de la imagen (fin: (${region.x + region.width}, ${region.y + region.height}) vs imagen: ($imgW, $imgH)).',
+        );
+        regionHasError = true;
+      }
+
+      if (region.width > 0 &&
+          region.height > 0 &&
+          (region.width < 10 || region.height < 10)) {
+        warnings.add(
+          'Región "${region.name}": dimensión inusualmente pequeña (${region.width}×${region.height}).',
+        );
+      }
+
+      if (!regionHasError) {
+        valid.add(region.name);
+      }
+    }
+
+    return AtlasValidationResult(
+      atlasId: definition.id,
+      imageWidth: imgW,
+      imageHeight: imgH,
+      errors: errors,
+      warnings: warnings,
+      validRegions: valid,
+    );
   }
 }

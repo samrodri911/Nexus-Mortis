@@ -11,7 +11,7 @@ import 'package:nexus_mortis/game/solver/puzzle_solver.dart';
 import 'package:nexus_mortis/game/validation/validation_service.dart';
 import 'package:nexus_mortis/game/validation/models/validation_status.dart';
 import 'package:nexus_mortis/game/visual/services/atlas_manager.dart';
-import 'package:nexus_mortis/game/visual/services/furniture_catalog.dart';
+import 'package:nexus_mortis/game/visual/services/atlas_registry.dart';
 
 /// Motor principal del juego Nexus Mortis.
 ///
@@ -113,9 +113,9 @@ class NexusGame extends FlameGame {
   Future<void> onLoad() async {
     await super.onLoad();
 
-    // Precargar atlas de texturas para que los sprites estén listos de inmediato
+    // Precargar todos los atlas de texturas para que los sprites estén listos de inmediato
     try {
-      await AtlasManager.instance.loadAtlas(FurnitureCatalog.kitchenAtlas);
+      await AtlasRegistry.instance.preloadAll(AtlasManager.instance);
     } catch (_) {
       // Fallback silencioso si se ejecuta en tests o entorno sin assets
     }

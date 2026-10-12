@@ -10,6 +10,7 @@ import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
 import 'package:nexus_mortis/game/visual/models/visual_map_plan.dart';
 import 'package:nexus_mortis/game/visual/services/atlas_manager.dart';
+import 'package:nexus_mortis/game/visual/services/atlas_registry.dart';
 import 'package:nexus_mortis/game/visual/services/decoration_catalog.dart';
 import 'package:nexus_mortis/game/visual/services/furniture_catalog.dart';
 import 'package:nexus_mortis/game/visual/utils/sprite_layout_helper.dart';
@@ -42,7 +43,7 @@ class FurnitureLayerComponent extends PositionComponent {
   final BoardController controller;
   BoardLayoutMetrics metrics;
   ZoneGeometryResult? geometry;
-  final VisualMapPlan? visualPlan;
+  VisualMapPlan? visualPlan;
 
   static const _furnitureRenderer = ArchitecturalFurnitureRenderer();
   static const _decorativeEvaluator = DecorativeFurnitureEvaluator();
@@ -55,11 +56,11 @@ class FurnitureLayerComponent extends PositionComponent {
     await super.onLoad();
     _rebuildCache(size);
 
-    // Si el atlas por defecto aún no está cargado, cargarlo asíncronamente
+    // Si el atlas por defecto aún no está cargado, cargar los atlas registrados
     // y regenerar la caché gráfica al completarse.
     if (!AtlasManager.instance.isLoaded(FurnitureCatalog.kitchenAtlasId)) {
       try {
-        await AtlasManager.instance.loadAtlas(FurnitureCatalog.kitchenAtlas);
+        await AtlasRegistry.instance.preloadAll(AtlasManager.instance);
         _rebuildCache(size);
       } catch (_) {
         // Fallback garantizado: ArchitecturalFurnitureRenderer se mantiene activo.
@@ -75,18 +76,30 @@ class FurnitureLayerComponent extends PositionComponent {
     }
   }
 
-  /// Actualiza las métricas y geometría, y regenera la caché gráfica del mobiliario.
+  /// Actualiza las métricas, geometría y opcionalmente el plan visual, regenerando la caché.
   void updateMetrics(
     BoardLayoutMetrics newMetrics,
     Vector2 newSize, [
     ZoneGeometryResult? newGeometry,
+    VisualMapPlan? newVisualPlan,
   ]) {
     metrics = newMetrics;
     if (newGeometry != null) {
       geometry = newGeometry;
     }
+    if (newVisualPlan != null) {
+      visualPlan = newVisualPlan;
+    }
     size = newSize;
     _rebuildCache(size);
+  }
+
+  /// Invalida y reconstruye la caché cuando cambia el plan visual.
+  void updateVisualPlan(VisualMapPlan? newPlan) {
+    if (visualPlan != newPlan) {
+      visualPlan = newPlan;
+      _rebuildCache(size);
+    }
   }
 
   void _rebuildCache(Vector2 boardSize) {
@@ -209,6 +222,18 @@ class FurnitureLayerComponent extends PositionComponent {
           fillRatio: entry.defaultScaleRatio,
         );
 
+        // Sombra de contacto sutil en el suelo bajo el mueble
+        if (SpriteLayoutHelper.shouldHaveContactShadow(objectId, category: entry.category)) {
+          final shadowRect = SpriteLayoutHelper.calculateContactShadowRect(
+            destRect: destRect,
+            cellRect: cellRect,
+          );
+          final shadowPaint = Paint()
+            ..color = const Color(0x30000000)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+          canvas.drawOval(shadowRect, shadowPaint);
+        }
+
         final paint = isDecorative
             ? (Paint()..color = const Color(0xDDFFFFFF))
             : null;
@@ -231,6 +256,19 @@ class FurnitureLayerComponent extends PositionComponent {
             srcHeight: sprite.srcSize.y,
             fillRatio: decEntry.defaultScaleRatio,
           );
+
+          // Sombra de contacto sutil para utilería decorativa de suelo
+          if (SpriteLayoutHelper.shouldHaveContactShadow(objectId, category: decEntry.category)) {
+            final shadowRect = SpriteLayoutHelper.calculateContactShadowRect(
+              destRect: destRect,
+              cellRect: cellRect,
+            );
+            final shadowPaint = Paint()
+              ..color = const Color(0x30000000)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+            canvas.drawOval(shadowRect, shadowPaint);
+          }
+
           final paint = Paint()..color = const Color(0xDDFFFFFF);
           sprite.renderRect(canvas, destRect, overridePaint: paint);
           return;

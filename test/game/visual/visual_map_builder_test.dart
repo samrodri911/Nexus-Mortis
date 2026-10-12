@@ -228,5 +228,97 @@ void main() {
         }
       }
     });
+
+    test('decorations exclude any object that is ambiguous with logicalObjectIds', () {
+      final plan = VisualMapBuilder.build(
+        zones: testZones,
+        blockedCells: blockedCells,
+        caseSeed: 42,
+        theme: ZoneTheme.classicMansion,
+        logicalObjectIds: {'obj_silla', 'obj_librero', 'obj_armario'},
+      );
+
+      for (final room in plan.rooms.values) {
+        for (final dec in room.decorations) {
+          final id = dec.objectId.toLowerCase();
+          expect(id.contains('silla') || id.contains('sillon'), isFalse,
+              reason: 'Decoration $id must not conflict with logical obj_silla');
+          expect(id.contains('librero') || id.contains('estante'), isFalse,
+              reason: 'Decoration $id must not conflict with logical obj_librero');
+          expect(id.contains('armario') || id.contains('aparador'), isFalse,
+              reason: 'Decoration $id must not conflict with logical obj_armario');
+        }
+      }
+    });
+
+    test('decorations never duplicate within the same room', () {
+      for (int seed = 1; seed <= 20; seed++) {
+        final plan = VisualMapBuilder.build(
+          zones: testZones,
+          blockedCells: const {},
+          caseSeed: seed,
+          theme: ZoneTheme.classicMansion,
+        );
+
+        for (final room in plan.rooms.values) {
+          final ids = room.decorations.map((d) => d.objectId).toList();
+          final uniqueIds = ids.toSet();
+          expect(ids.length, equals(uniqueIds.length),
+              reason: 'Room ${room.zoneId} with seed $seed has duplicate decorations: $ids');
+        }
+      }
+    });
+
+    test('decorations strictly obey density limits (max 1 in <=3 cells, max 2 in >=4 cells)', () {
+      final smallZone = const ZoneData(
+        id: 'small',
+        name: 'Despacho',
+        cells: [CellPosition(0, 0), CellPosition(0, 1), CellPosition(0, 2)], // 3 cells
+      );
+      final largeZone = const ZoneData(
+        id: 'large',
+        name: 'Salón Principal',
+        cells: [
+          CellPosition(1, 0), CellPosition(1, 1),
+          CellPosition(2, 0), CellPosition(2, 1),
+          CellPosition(3, 0), CellPosition(3, 1),
+        ], // 6 cells
+      );
+
+      for (int seed = 1; seed <= 30; seed++) {
+        final plan = VisualMapBuilder.build(
+          zones: [smallZone, largeZone],
+          blockedCells: const {},
+          caseSeed: seed,
+          theme: ZoneTheme.classicMansion,
+        );
+
+        final smallPlan = plan.forZone('small')!;
+        final largePlan = plan.forZone('large')!;
+
+        expect(smallPlan.decorations.length, lessThanOrEqualTo(1),
+            reason: 'Small room (3 cells) must have at most 1 decoration');
+        expect(largePlan.decorations.length, lessThanOrEqualTo(2),
+            reason: 'Large room (6 cells) must have at most 2 decorations');
+      }
+    });
+
+    test('decorations never appear on the reserved zoneNameCell', () {
+      const reservedNameCell = CellPosition(0, 1);
+      final plan = VisualMapBuilder.build(
+        zones: testZones,
+        blockedCells: const {},
+        caseSeed: 42,
+        theme: ZoneTheme.classicMansion,
+        zoneNameCells: {'z0': reservedNameCell},
+      );
+
+      final r0 = plan.forZone('z0')!;
+      for (final dec in r0.decorations) {
+        final pos = CellPosition(dec.row, dec.col);
+        expect(pos, isNot(equals(reservedNameCell)),
+            reason: 'Decoration must not overlap reserved zone name cell');
+      }
+    });
   });
 }

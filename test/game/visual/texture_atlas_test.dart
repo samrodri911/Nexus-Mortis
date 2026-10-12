@@ -91,18 +91,18 @@ void main() {
       expect(resultAspect, closeTo(expectedAspect, 0.001));
     });
 
-    test('enforces fill ratio strictly clamped between 0.65 and 0.80', () {
+    test('enforces fill ratio strictly clamped between 0.20 and 0.80', () {
       const cellRect = Rect.fromLTWH(0, 0, 100, 100);
 
-      // Ratio lower than 0.65 should be clamped to 0.65
+      // Ratio lower than 0.20 should be clamped to 0.20
       final destMin = SpriteLayoutHelper.calculateDestRect(
         cellRect: cellRect,
         srcWidth: 100,
         srcHeight: 100,
-        fillRatio: 0.40,
+        fillRatio: 0.10,
       );
-      expect(destMin.width, closeTo(65.0, 0.001));
-      expect(destMin.height, closeTo(65.0, 0.001));
+      expect(destMin.width, closeTo(20.0, 0.001));
+      expect(destMin.height, closeTo(20.0, 0.001));
 
       // Ratio higher than 0.80 should be clamped to 0.80
       final destMax = SpriteLayoutHelper.calculateDestRect(

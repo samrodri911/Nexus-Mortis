@@ -65,7 +65,9 @@ void main() {
       expect(loaded.image.height, 559);
       expect(AtlasManager.instance.isLoaded(FurnitureCatalog.kitchenAtlasId), isTrue);
 
-      for (final entry in FurnitureCatalog.instance.allEntries) {
+      final kitchenEntries = FurnitureCatalog.instance.allEntries
+          .where((e) => e.atlasId == FurnitureCatalog.kitchenAtlasId);
+      for (final entry in kitchenEntries) {
         final sprite = AtlasManager.instance.getSprite(entry.atlasId, entry.regionName);
         expect(sprite, isNotNull, reason: 'Sprite for ${entry.regionName} should be loaded');
         expect(sprite!.image, loaded.image);

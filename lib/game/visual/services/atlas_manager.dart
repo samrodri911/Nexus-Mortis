@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flame/sprite.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:nexus_mortis/game/visual/models/atlas_validation_result.dart';
 import 'package:nexus_mortis/game/visual/models/texture_atlas.dart';
 
 /// Gestor centralizado de carga y ciclo de vida de atlas de texturas.
@@ -72,6 +73,18 @@ class AtlasManager {
 
   /// Verifica si un atlas específico ya está cargado en memoria.
   bool isLoaded(String atlasId) => _loadedAtlases.containsKey(atlasId);
+
+  /// Obtiene los identificadores de todos los atlas cargados actualmente.
+  List<String> get loadedAtlasIds => _loadedAtlases.keys.toList();
+
+  /// Obtiene todas las instancias de atlas cargados en memoria.
+  List<LoadedAtlas> get allLoadedAtlases => _loadedAtlases.values.toList();
+
+  /// Ejecuta un diagnóstico geométrico sobre un atlas cargado.
+  /// Retorna null si el atlas no está cargado.
+  AtlasValidationResult? validateAtlas(String atlasId) {
+    return _loadedAtlases[atlasId]?.validate();
+  }
 
   /// Limpia la caché de atlas cargados.
   void clear() {

@@ -6,7 +6,6 @@ import 'package:nexus_mortis/game/board/components/floor_plan_component.dart';
 import 'package:nexus_mortis/game/board/components/furniture_layer_component.dart';
 import 'package:nexus_mortis/game/board/components/walls_overlay_component.dart';
 import 'package:nexus_mortis/game/board/controllers/board_controller.dart';
-import 'package:nexus_mortis/game/board/models/cell_data.dart';
 import 'package:nexus_mortis/game/board/services/board_layout_metrics.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/difficulty/models/difficulty_level.dart';
@@ -50,12 +49,9 @@ void main() {
       expect(tableSprite!.srcSize.x, 99.0);
       expect(tableSprite.srcSize.y, 81.0);
 
-      // Los demás objetos lógicos de GeneratorCatalog activan fallback (retornan null)
-      for (final obj in GeneratorCatalog.objects) {
-        if (obj.id == 'obj_silla' || obj.id == 'obj_mesa') continue;
-        final entry = catalog.findEntryForLogicalObject(obj.id, label: obj.name);
-        expect(entry, isNull, reason: '${obj.name} no debe forzar sprite y debe activar fallback');
-      }
+      // Objetos sin sprite asignado activan fallback (retornan null)
+      expect(catalog.findEntryForLogicalObject('obj_desconocido_xyz'), isNull);
+      expect(catalog.findEntryForLogicalObject('obj_custom_sin_sprite'), isNull);
     });
 
     test('2. Comportamiento Responsive y Centrado en Resoluciones (4x4, 5x4, 5x5, 6x5, 6x6)', () {
@@ -156,7 +152,7 @@ void main() {
       );
       final cellComponent = CellComponent(
         cellData: controller.cells[0][0],
-        onTapped: (_, __) {},
+        onTapped: (_, _) {},
         getActiveSuspectId: () => null,
         allSuspects: genResult.caseData.suspects,
         position: Vector2.zero(),

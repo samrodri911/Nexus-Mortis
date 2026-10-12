@@ -32,6 +32,8 @@ class VisualMapBuilder {
     required Set<CellPosition> blockedCells,
     required int caseSeed,
     ZoneTheme? theme,
+    Set<String> logicalObjectIds = const {},
+    Map<String, CellPosition> zoneNameCells = const {},
   }) {
     final rooms = <String, RoomVisualPlan>{};
 
@@ -56,12 +58,14 @@ class VisualMapBuilder {
         theme: theme,
       );
 
-      // Evaluar decoraciones visuales
+      // Evaluar decoraciones visuales sin ambigüedad con objetos lógicos
       final decorations = _evaluateDecorations(
         zone: zone,
         archetype: archetype,
         blockedCells: blockedCells,
         theme: theme,
+        logicalObjectIds: logicalObjectIds,
+        zoneNameCell: zoneNameCells[zone.id],
         rng: rng,
       );
 
@@ -105,80 +109,135 @@ class VisualMapBuilder {
 
   /// Evalúa y genera decoraciones visuales para una zona.
   ///
-  /// Reglas de densidad (coherentes con DecorativeFurnitureEvaluator):
-  /// - `none`: 0 decoraciones.
-  /// - `sparse`: 0-1 decoraciones según tamaño de la habitación.
-  /// - `moderate`: 1-2 decoraciones según tamaño de la habitación.
-  ///
-  /// No coloca decoraciones en celdas bloqueadas por objetos lógicos.
+  /// Reglas estrictas:
+  /// - Habitaciones de 1 a 3 celdas: máximo 1 elemento decorativo adicional.
+  /// - Habitaciones de 4 o más celdas: máximo 2 elementos decorativos adicionales.
+  /// - Excluye la celda del nombre de la habitación para evitar solapamientos.
+  /// - Excluye cualquier elemento decorativo que comparta identidad con los objetos lógicos del caso.
+  /// - Nunca coloca dos decoraciones idénticas en la misma habitación.
   static List<VisualPlacement> _evaluateDecorations({
     required ZoneData zone,
     required RoomArchetype archetype,
     required Set<CellPosition> blockedCells,
     required ZoneTheme? theme,
+    required Set<String> logicalObjectIds,
+    required CellPosition? zoneNameCell,
     required Random rng,
   }) {
     if (archetype.decorationDensity == DecorationDensity.none) return const [];
 
     final zoneCellCount = zone.cells.length;
-
-    // Contar objetos lógicos ya presentes
     final logicalCount = zone.cells.where(blockedCells.contains).length;
-    if (logicalCount >= 2) return const [];
 
-    // Calcular target de decoraciones
-    int targetCount;
-    if (archetype.decorationDensity == DecorationDensity.sparse) {
-      if (zoneCellCount <= 2 || logicalCount >= 1) {
-        targetCount = 0;
-      } else if (zoneCellCount <= 4) {
-        targetCount = logicalCount == 0 ? 1 : 0;
+    // Celdas libres no ocupadas por objetos lógicos
+    final freeCells = zone.cells.where((c) => !blockedCells.contains(c)).toList();
+    if (freeCells.isEmpty) return const [];
+
+    // Celdas elegibles (excluyendo la celda del nombre de zona si la habitación tiene >1 celda)
+    final eligibleCells = (zoneCellCount > 1 && zoneNameCell != null)
+        ? freeCells.where((c) => c != zoneNameCell).toList()
+        : freeCells;
+
+    if (eligibleCells.isEmpty) return const [];
+
+    // Límites de densidad:
+    // 1-3 celdas: máx 1; 4+ celdas: máx 2
+    int maxAllowed;
+    if (zoneCellCount <= 3) {
+      if (zoneCellCount <= 2 || logicalCount >= 1 || eligibleCells.isEmpty) {
+        maxAllowed = (zoneCellCount == 3 && logicalCount == 0) ? 1 : 0;
       } else {
-        targetCount = 1;
+        maxAllowed = 1;
       }
     } else {
-      // moderate
-      if (zoneCellCount <= 2) {
-        targetCount = 0;
-      } else if (zoneCellCount <= 4) {
-        targetCount = 1;
+      if (logicalCount >= 2) {
+        maxAllowed = 0;
+      } else if (logicalCount == 1) {
+        maxAllowed = 1;
       } else {
-        targetCount = min(2, (zoneCellCount / 3).floor());
-      }
-      if (logicalCount >= 1) {
-        targetCount = min(targetCount, max(0, 2 - logicalCount));
+        maxAllowed = 2;
       }
     }
 
+    if (archetype.decorationDensity == DecorationDensity.sparse && maxAllowed > 1) {
+      maxAllowed = 1;
+    }
+
+    final targetCount = min(maxAllowed, eligibleCells.length);
     if (targetCount <= 0) return const [];
 
-    // Filtrar celdas elegibles (no bloqueadas)
-    final eligible = zone.cells
-        .where((cell) => !blockedCells.contains(cell))
+    // Obtener pool temático y filtrar ambigüedades con objetos lógicos del caso
+    final pool = _getDecorationPool(zone.name ?? '', theme);
+    final filteredPool = pool
+        .where((id) => !_isAmbiguousWithLogicalObjects(id, logicalObjectIds))
         .toList();
 
-    if (eligible.isEmpty) return const [];
+    if (filteredPool.isEmpty) return const [];
 
-    // Seleccionar celdas
-    eligible.shuffle(rng);
-    final selectedCells = eligible.take(targetCount).toList();
+    // Seleccionar de forma determinista celdas y decoraciones sin repetición
+    eligibleCells.shuffle(rng);
+    filteredPool.shuffle(rng);
 
-    // Seleccionar IDs de decoración temáticos
-    final pool = _getDecorationPool(zone.name ?? '', theme);
-    if (pool.isEmpty) return const [];
-
+    final selectedCells = eligibleCells.take(targetCount).toList();
     final result = <VisualPlacement>[];
-    for (final cell in selectedCells) {
-      final objId = pool[rng.nextInt(pool.length)];
+
+    final distinctCount = min(selectedCells.length, filteredPool.length);
+    for (int i = 0; i < distinctCount; i++) {
       result.add(VisualPlacement(
-        row: cell.row,
-        col: cell.col,
-        objectId: objId,
+        row: selectedCells[i].row,
+        col: selectedCells[i].col,
+        objectId: filteredPool[i],
         zoneId: zone.id,
       ));
     }
 
     return result;
+  }
+
+  /// Comprueba si un ID decorativo puede confundirse con algún objeto lógico del caso.
+  static bool _isAmbiguousWithLogicalObjects(
+    String decorId,
+    Set<String> activeLogicalObjectIds,
+  ) {
+    if (activeLogicalObjectIds.isEmpty) return false;
+    final decor = decorId.toLowerCase();
+
+    for (final logicalId in activeLogicalObjectIds) {
+      final log = logicalId.toLowerCase();
+
+      // 1. Coincidencia directa
+      if (decor == log) return true;
+
+      // 2. Coincidencia por familia semántica/visual
+      if ((log.contains('silla') || log.contains('chair')) &&
+          (decor.contains('silla') || decor.contains('sillon') || decor.contains('sillón'))) {
+        return true;
+      }
+      if ((log.contains('mesa') || log.contains('table') || log.contains('escritorio') || log.contains('desk')) &&
+          (decor.contains('mesa') || decor.contains('escritorio') || decor.contains('desk'))) {
+        return true;
+      }
+      if ((log.contains('armario') || log.contains('wardrobe') || log.contains('closet')) &&
+          (decor.contains('armario') || decor.contains('aparador'))) {
+        return true;
+      }
+      if ((log.contains('librero') || log.contains('bookshelf') || log.contains('estant')) &&
+          (decor.contains('librero') || decor.contains('estante') || decor.contains('estant'))) {
+        return true;
+      }
+      if ((log.contains('lampara') || log.contains('lámpara') || log.contains('lamp')) &&
+          (decor.contains('lampara') || decor.contains('lámpara') || decor.contains('foco'))) {
+        return true;
+      }
+      if ((log.contains('caja') || log.contains('box')) &&
+          (decor.contains('caja') || decor.contains('baul') || decor.contains('baúl'))) {
+        return true;
+      }
+      if ((log.contains('cama') || log.contains('bed')) && decor.contains('cama')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Retorna el pool de decoraciones temáticas disponibles para una habitación.
@@ -238,28 +297,28 @@ class VisualMapBuilder {
 
     // Mansión Clásica / Default
     if (lower.contains('biblio') || lower.contains('despacho')) {
-      return const ['obj_librero', 'obj_lampara', 'obj_sillon'];
+      return const ['obj_sillon', 'obj_lampara', 'obj_reloj', 'obj_estatua', 'obj_maceta'];
     }
     if (lower.contains('salón') || lower.contains('salon')) {
-      return const ['obj_sillon', 'obj_reloj', 'obj_estatua'];
+      return const ['obj_sillon', 'obj_reloj', 'obj_estatua', 'obj_maceta', 'obj_pedestal'];
     }
     if (lower.contains('comedor')) {
-      return const ['obj_aparador', 'obj_silla', 'obj_reloj'];
+      return const ['obj_aparador', 'obj_reloj', 'obj_estatua', 'obj_maceta'];
     }
     if (lower.contains('cocina')) {
-      return const ['obj_aparador', 'obj_baul'];
+      return const ['obj_aparador', 'obj_baul', 'obj_reloj'];
     }
     if (lower.contains('dormitorio')) {
-      return const ['obj_sillon', 'obj_armario', 'obj_lampara'];
+      return const ['obj_sillon', 'obj_lampara', 'obj_reloj', 'obj_maceta'];
     }
     if (lower.contains('juego')) {
-      return const ['obj_sillon', 'obj_reloj', 'obj_librero'];
+      return const ['obj_sillon', 'obj_reloj', 'obj_estatua', 'obj_baul'];
     }
     if (lower.contains('vestíbulo') || lower.contains('vestibulo')) {
-      return const ['obj_estatua', 'obj_reloj', 'obj_columna'];
+      return const ['obj_estatua', 'obj_reloj', 'obj_columna', 'obj_maceta', 'obj_pedestal'];
     }
 
-    return const ['obj_sillon', 'obj_reloj', 'obj_librero'];
+    return const ['obj_sillon', 'obj_reloj', 'obj_estatua', 'obj_maceta'];
   }
 
   /// Hash determinista multiplataforma.

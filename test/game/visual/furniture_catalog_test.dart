@@ -6,9 +6,9 @@ void main() {
   group('FurnitureCatalog Tests', () {
     final catalog = FurnitureCatalog.instance;
 
-    test('registers exactly the 7 required test items', () {
+    test('registers kitchen items and additional thematic furniture entries', () {
       final entries = catalog.allEntries;
-      expect(entries.length, 7);
+      expect(entries.length, greaterThanOrEqualTo(7));
 
       final ids = entries.map((e) => e.id).toSet();
       expect(
@@ -21,18 +21,24 @@ void main() {
           'refrigerator_01',
           'stove_01',
           'sink_01',
+          'bed_01',
+          'wardrobe_01',
+          'bookshelf_01',
+          'desk_01',
+          'lamp_01',
+          'box_01',
         ]),
       );
     });
 
-    test('all 7 test items have valid regions in kitchenAtlas within 1024x559', () {
+    test('all kitchen test items have valid regions in kitchenAtlas within 1024x559', () {
       const atlas = FurnitureCatalog.kitchenAtlas;
       expect(atlas.assetPath, 'assets/game/atlases/furniture/furniture_sheet.png');
 
       const maxSheetWidth = 1024.0;
       const maxSheetHeight = 559.0;
 
-      for (final entry in catalog.allEntries) {
+      for (final entry in catalog.allEntries.where((e) => e.atlasId == FurnitureCatalog.kitchenAtlasId)) {
         final region = atlas.getRegion(entry.regionName);
         expect(region, isNotNull, reason: 'Region ${entry.regionName} must exist in kitchenAtlas');
 
@@ -50,12 +56,18 @@ void main() {
       }
     });
 
-    test('findEntryForLogicalObject resolves existing objects and falls back correctly', () {
+    test('findEntryForLogicalObject resolves all 8 logical objects and falls back correctly', () {
       // Objetos lógicos reales que tienen sprite
       expect(catalog.findEntryForLogicalObject('obj_silla')?.id, 'chair_01');
       expect(catalog.findEntryForLogicalObject('silla_madera', label: 'Silla')?.id, 'chair_01');
       expect(catalog.findEntryForLogicalObject('obj_mesa')?.id, 'table_01');
       expect(catalog.findEntryForLogicalObject('mesa_comedor', label: 'Mesa')?.id, 'table_01');
+      expect(catalog.findEntryForLogicalObject('obj_cama')?.id, 'bed_01');
+      expect(catalog.findEntryForLogicalObject('obj_librero')?.id, 'bookshelf_01');
+      expect(catalog.findEntryForLogicalObject('obj_armario')?.id, 'wardrobe_01');
+      expect(catalog.findEntryForLogicalObject('obj_escritorio')?.id, 'desk_01');
+      expect(catalog.findEntryForLogicalObject('obj_caja')?.id, 'box_01');
+      expect(catalog.findEntryForLogicalObject('obj_lampara')?.id, 'lamp_01');
 
       // Consulta directa por ID de catálogo
       expect(catalog.findEntryForLogicalObject('chair_01')?.id, 'chair_01');
@@ -66,13 +78,8 @@ void main() {
       expect(catalog.findEntryForLogicalObject('stove_01')?.id, 'stove_01');
       expect(catalog.findEntryForLogicalObject('sink_01')?.id, 'sink_01');
 
-      // Objetos sin correspondencia en los 7 sprites de prueba retornan null para activar fallback
-      expect(catalog.findEntryForLogicalObject('obj_cama'), isNull);
-      expect(catalog.findEntryForLogicalObject('obj_librero'), isNull);
-      expect(catalog.findEntryForLogicalObject('obj_armario'), isNull);
-      expect(catalog.findEntryForLogicalObject('obj_escritorio'), isNull);
-      expect(catalog.findEntryForLogicalObject('obj_caja'), isNull);
-      expect(catalog.findEntryForLogicalObject('obj_lampara'), isNull);
+      // Objetos desconocidos o decorativos sin registrar retornan null para activar fallback
+      expect(catalog.findEntryForLogicalObject('obj_desconocido_xyz'), isNull);
       expect(catalog.findEntryForLogicalObject('sarcofago'), isNull);
       expect(catalog.findEntryForLogicalObject('vitrina'), isNull);
     });

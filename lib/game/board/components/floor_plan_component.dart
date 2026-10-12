@@ -6,7 +6,10 @@ import 'package:nexus_mortis/game/board/controllers/board_controller.dart';
 import 'package:nexus_mortis/game/board/models/zone_visual_theme.dart';
 import 'package:nexus_mortis/game/board/services/zone_geometry_builder.dart';
 import 'package:nexus_mortis/game/puzzles/models/cell_position.dart';
+import 'package:nexus_mortis/game/puzzles/models/zone_data.dart';
 import 'package:nexus_mortis/game/visual/models/visual_map_plan.dart';
+import 'package:nexus_mortis/game/visual/services/atlas_manager.dart';
+import 'package:nexus_mortis/game/visual/services/floor_catalog.dart';
 
 /// Componente responsable del plano arquitectónico base del tablero.
 ///
@@ -29,7 +32,7 @@ class FloorPlanComponent extends PositionComponent {
 
   final BoardController controller;
   ZoneGeometryResult? geometry;
-  final VisualMapPlan? visualPlan;
+  VisualMapPlan? visualPlan;
   static const _geometryBuilder = ZoneGeometryBuilder();
 
   ui.Picture? _cachedPicture;
@@ -61,10 +64,25 @@ class FloorPlanComponent extends PositionComponent {
   }
 
   /// Actualiza la geometría precalculada y regenera la caché.
-  void updateGeometry(ZoneGeometryResult newGeometry, Vector2 newSize) {
+  void updateGeometry(
+    ZoneGeometryResult newGeometry,
+    Vector2 newSize, [
+    VisualMapPlan? newVisualPlan,
+  ]) {
     geometry = newGeometry;
+    if (newVisualPlan != null) {
+      visualPlan = newVisualPlan;
+    }
     size = newSize;
     _rebuildCache(size);
+  }
+
+  /// Invalida y reconstruye la caché cuando cambia el plan visual.
+  void updateVisualPlan(VisualMapPlan? newPlan) {
+    if (visualPlan != newPlan) {
+      visualPlan = newPlan;
+      _rebuildCache(size);
+    }
   }
 
   void _rebuildCache(Vector2 boardSize) {
@@ -137,8 +155,15 @@ class FloorPlanComponent extends PositionComponent {
 
       final visualCenter = geom.zoneVisualCenters[zone.id] ?? geom.zoneCentroids[zone.id];
 
-      // Suelo texturizado claro
-      theme.renderFloorTexture(canvas, path, bounds, geom.cellWidth);
+      // Suelo texturizado claro (sprite de FloorCatalog si existe, o fallback vectorial)
+      _renderRoomFloor(
+        canvas: canvas,
+        path: path,
+        bounds: bounds,
+        zone: zone,
+        theme: theme,
+        geom: geom,
+      );
 
       // Alfombra decorativa sutil (dibujada ÚNICAMENTE si fue evaluada y admitida en geom.zoneRugRects)
       final rugRect = geom.zoneRugRects[zone.id];
@@ -184,6 +209,52 @@ class FloorPlanComponent extends PositionComponent {
     _cachedPicture?.dispose();
     _cachedPicture = recorder.endRecording();
     _lastRecordedSize = boardSize.clone();
+  }
+
+  void _renderRoomFloor({
+    required Canvas canvas,
+    required ui.Path path,
+    required Rect bounds,
+    required ZoneData zone,
+    required ZoneVisualTheme theme,
+    required ZoneGeometryResult geom,
+  }) {
+    final roomPlan = visualPlan?.forZone(zone.id);
+    final tileType = roomPlan?.floorTileType ?? theme.tileType;
+    final floorEntry = FloorCatalog.instance.getFloorForTileType(tileType);
+
+    if (floorEntry.hasSprite) {
+      final sprite = AtlasManager.instance.getSprite(
+        floorEntry.atlasId!,
+        floorEntry.regionName!,
+      );
+      if (sprite != null && sprite.srcSize.x > 0 && sprite.srcSize.y > 0) {
+        canvas.save();
+        canvas.clipPath(path);
+
+        // Fondo de tinte base suave para evitar artefactos en bordes
+        canvas.drawRect(bounds, Paint()..color = theme.tintColor);
+
+        // Mapear el sprite por celda para alineación geométrica precisa
+        for (final cell in zone.cells) {
+          final cellRect = Rect.fromLTWH(
+            cell.col * geom.cellWidth,
+            cell.row * geom.cellHeight,
+            geom.cellWidth,
+            geom.cellHeight,
+          );
+          // Opacidad y tinte sutil para preservar bajo contraste y legibilidad
+          final floorPaint = Paint()..color = const Color(0xE6FFFFFF);
+          sprite.renderRect(canvas, cellRect, overridePaint: floorPaint);
+        }
+
+        canvas.restore();
+        return;
+      }
+    }
+
+    // Fallback garantizado a dibujo vectorial existente
+    theme.renderFloorTexture(canvas, path, bounds, geom.cellWidth);
   }
 
   @override

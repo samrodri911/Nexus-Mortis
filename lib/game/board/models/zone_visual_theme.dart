@@ -483,9 +483,9 @@ class ZoneVisualTheme {
     }
 
     final formattedText = lines.join('\n');
-    final outlineStrokeWidth = (cellWidth * 0.042).clamp(2.5, 3.0);
+    final outlineStrokeWidth = (cellWidth * 0.022).clamp(1.2, 1.6);
 
-    // 3. Pasada 1: Contorno exterior negro grueso (2.5–3.0px) con remates redondos
+    // 3. Pasada 1: Contorno fino arquitectónico (~1.5px) con remates redondos
     final strokePb = ui.ParagraphBuilder(
       ui.ParagraphStyle(
         textAlign: ui.TextAlign.center,
@@ -499,16 +499,16 @@ class ZoneVisualTheme {
           ..strokeWidth = outlineStrokeWidth
           ..strokeCap = ui.StrokeCap.round
           ..strokeJoin = ui.StrokeJoin.round
-          ..color = const ui.Color(0xFF000000),
-        fontWeight: ui.FontWeight.w900,
-        letterSpacing: 0.8,
+          ..color = const ui.Color(0xA6141210), // Carbón suave translúcido para contorno fino
+        fontWeight: ui.FontWeight.w700,
+        letterSpacing: 1.2,
         fontFamily: 'Roboto',
       ))
       ..addText(formattedText);
 
     final strokeParagraph = strokePb.build()..layout(ui.ParagraphConstraints(width: maxAvailW));
 
-    // 4. Pasada 2: Relleno blanco nítido de alto contraste
+    // 4. Pasada 2: Relleno marfil translúcido (#F7F4EB al 75% de opacidad)
     final fillPb = ui.ParagraphBuilder(
       ui.ParagraphStyle(
         textAlign: ui.TextAlign.center,
@@ -517,9 +517,9 @@ class ZoneVisualTheme {
       ),
     )
       ..pushStyle(ui.TextStyle(
-        color: const ui.Color(0xFFFFFFFF),
-        fontWeight: ui.FontWeight.w900,
-        letterSpacing: 0.8,
+        color: const ui.Color(0xBFF7F4EB), // Marfil translúcido elegante
+        fontWeight: ui.FontWeight.w700,
+        letterSpacing: 1.2,
         fontFamily: 'Roboto',
       ))
       ..addText(formattedText);
@@ -538,11 +538,9 @@ class ZoneVisualTheme {
     if (roomClipPath != null) {
       canvas.clipPath(roomClipPath);
     }
-    // Sombra sutil proyectada
-    canvas.drawParagraph(strokeParagraph, drawOffset + const ui.Offset(0.5, 1.0));
-    // Contorno exterior negro
+    // Contorno exterior fino arquitectónico
     canvas.drawParagraph(strokeParagraph, drawOffset);
-    // Relleno blanco
+    // Relleno marfil de marca de agua
     canvas.drawParagraph(fillParagraph, drawOffset);
     canvas.restore();
   }
